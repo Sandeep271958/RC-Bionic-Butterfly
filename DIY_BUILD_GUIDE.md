@@ -5,15 +5,16 @@
 ## Table of Contents
 1. [Introduction & Aerodynamic Principles](#1-introduction--aerodynamic-principles)
 2. [Microcontroller Upgrade Research & Flight Response Analysis](#2-microcontroller-upgrade-research--flight-response-analysis)
-3. [Complete Bill of Materials (Procurement Inventory)](#3-complete-bill-of-materials-procurement-inventory)
-4. [Phase 1: 3D Printing & Component Preparation](#4-phase-1-3d-printing--component-preparation)
-5. [Phase 2: Wing Skeleton & Aerodynamic Skinning](#5-phase-2-wing-skeleton--aerodynamic-skinning)
-6. [Phase 3: Servo Mechanics & Chassis Assembly](#6-phase-3-servo-mechanics--chassis-assembly)
-7. [Phase 4: Electrical Wiring & Power Conditioning](#7-phase-4-electrical-wiring--power-conditioning)
-8. [Phase 5: Firmware Configuration & Flashing](#8-phase-5-firmware-configuration--flashing)
-9. [Phase 6: Radio Transmitter Setup & Channel Calibration](#9-phase-6-radio-transmitter-setup--channel-calibration)
-10. [Phase 7: Pre-Flight Checks, CG Balancing & Maiden Flight](#10-phase-7-pre-flight-checks-cg-balancing--maiden-flight)
-11. [Troubleshooting & Flight Tuning](#11-troubleshooting--flight-tuning)
+3. [Key Innovations from Max Imagination's ESP-FLUTTER (Video Breakdown)](#3-key-innovations-from-max-imaginations-esp-flutter-video-breakdown)
+4. [Complete Bill of Materials (Procurement Inventory)](#4-complete-bill-of-materials-procurement-inventory)
+5. [Phase 1: 3D Printing & Component Preparation](#5-phase-1-3d-printing--component-preparation)
+6. [Phase 2: Wing Skeleton, Glowing LEDs & Aerodynamic Skinning](#6-phase-2-wing-skeleton-glowing-leds--aerodynamic-skinning)
+7. [Phase 3: Servo Mechanics & Chassis Assembly](#7-phase-3-servo-mechanics--chassis-assembly)
+8. [Phase 4: Electrical Wiring & Power Conditioning](#8-phase-4-electrical-wiring--power-conditioning)
+9. [Phase 5: Firmware Configuration & Flashing (Arduino Pro Micro & ESP32-C3)](#9-phase-5-firmware-configuration--flashing-arduino-pro-micro--esp32-c3)
+10. [Phase 6: Flying via Smartphone Web App or RC Transmitter](#10-phase-6-flying-via-smartphone-web-app-or-rc-transmitter)
+11. [Phase 7: Pre-Flight Checks, CG Balancing & Maiden Flight](#11-phase-7-pre-flight-checks-cg-balancing--maiden-flight)
+12. [Troubleshooting & Flight Tuning](#12-troubleshooting--flight-tuning)
 
 ---
 
@@ -33,202 +34,156 @@ Unlike conventional propeller aircraft or multirotors, an **ornithopter** genera
 
 ### How the Two-Servo Bionic Butterfly Flies
 1. **Thrust via Aeroelastic Flex:** The leading edge is rigid (1.5mm carbon fiber rod), while the trailing edge and ribs are flexible (0.8mm–1.0mm carbon fiber rods). When the servo pushes the wing down on the downstroke, the leading edge descends first and the flexible trailing edge deflects upward, directing air backward to produce forward thrust. On the upstroke, the trailing edge bends downward, continuing to direct air backward.
-2. **Steering (Roll / Bank):** Achieved through differential wing dihedral. By biasing the left servo slightly upward and the right servo downward, asymmetric aerodynamic drag and lift roll the butterfly smoothly in the commanded direction.
-3. **Pitch (Climb / Dive):** Achieved through symmetric wing bias. Shifting the neutral stroke angle of both wings upward shifts the center of aerodynamic pressure forward relative to the Center of Gravity (CG), pitching the nose up to climb. Shifting them downward pitches the nose down.
+2. **Steering (Differential Amplitude):** Rather than merely tilting the wings, high-performance ornithopters modulate the *stroke amplitude* between wings. To turn right, the left wing flaps through a larger arc (generating higher thrust/lift) while the right wing flaps through a smaller arc. This induces a clean, natural bank-and-turn yaw moment without stalling the inside wing!
+3. **Turn Lift Boost:** When banked in a turn, vertical lift decreases. An automatic +15% throttle boost during hard steering maintains altitude.
+4. **Pitch (Climb / Dive):** Achieved through symmetric wing bias. Shifting the neutral stroke angle of both wings upward shifts the center of aerodynamic pressure forward relative to the Center of Gravity (CG), pitching the nose up to climb. Shifting them downward pitches the nose down.
 
 ---
 
 ## 2. Microcontroller Upgrade Research & Flight Response Analysis
 
-The baseline build uses an **Arduino Pro Micro (ATmega32U4, 8-bit AVR @ 16MHz)** with an external PPM receiver. While functional and accessible, replacing the microcontroller can substantially improve flight responsiveness, weight, and stability.
-
-### Deep Comparative Analysis
+The baseline build uses an **Arduino Pro Micro (ATmega32U4, 8-bit AVR @ 16MHz)** with an external PPM receiver. Replacing the microcontroller substantially improves flight responsiveness, weight, and stability:
 
 | Feature / Metric | Stock: Arduino Pro Micro (ATmega32U4) | Upgrade 1: Seeed Studio XIAO ESP32-C3 | Upgrade 2: FPV Micro AIO (STM32F411 + Gyro + ELRS) | Upgrade 3: Waveshare RP2040-Zero |
 | :--- | :--- | :--- | :--- | :--- |
 | **CPU Architecture** | 8-bit AVR @ 16 MHz | 32-bit RISC-V @ 160 MHz | 32-bit ARM Cortex-M4 @ 100 MHz | Dual-Core ARM Cortex-M0+ @ 133 MHz |
 | **Weight (Board only)** | ~5.0 g | **1.2 g** | ~3.0 g (All-in-One) | ~1.5 g |
-| **Built-in Wireless** | None (Needs ~1.5g RX) | **ESP-NOW (2.4GHz Direct)** | **ExpressLRS (ELRS 2.4GHz)** | None (Needs ~0.5g RX) |
-| **Control Latency** | 20 ms (PPM frame) | **2 – 4 ms (ESP-NOW packet)** | **2 ms (ELRS 250Hz)** | 2 – 3 ms (CRSF UART) |
+| **Built-in Wireless** | None (Needs ~1.5g RX) | **ESP-NOW & Wi-Fi Web App** | **ExpressLRS (ELRS 2.4GHz)** | None (Needs ~0.5g RX) |
+| **Control Latency** | 20 ms (PPM frame) | **2 – 4 ms (ESP-NOW / Web)** | **2 ms (ELRS 250Hz)** | 2 – 3 ms (CRSF UART) |
 | **Servo Refresh Rate** | 50 Hz (standard Servo.h) | **250 Hz – 333 Hz (LEDC)** | **333 Hz (Timer PWM)** | **250 Hz – 333 Hz (PIO)** |
 | **Active Stabilization** | None (Software open-loop) | Optional via I2C MPU6050 | **Integrated 6-Axis Gyro (BMI270)** | Optional via I2C IMU |
 | **Brownout Sensitivity** | High (Weak LDO regulator) | Medium (Low drop-out) | Ultra-low (High-efficiency switching BEC) | Low |
 | **Total System Weight** | ~6.5 g (with RX + cables) | **1.2 g (No RX needed!)** | **3.0 g (All integrated)** | ~2.0 g (with micro RX) |
 
-### Key Improvements from Upgrading
+---
 
-#### 1. Seeed Studio XIAO ESP32-C3 (Best DIY Upgrade for Weight & Speed)
-* **Eliminates the Separate Receiver:** Using the ESP-NOW protocol, the Xiao ESP32-C3 receives control packets directly from an ESP32 transmitter module or handheld remote. This eliminates the external receiver PCB, antenna, and wiring harness, shaving **5.3 grams** off the aircraft. On a 55g butterfly, this represents an immediate **~10% weight reduction**!
-* **Ultra-Low Latency:** Latency drops from 20ms (PPM) down to **2–4 milliseconds**, providing instantaneous control authority.
-* **High-Speed PWM:** Generates hardware PWM pulses at 250Hz–333Hz, enabling digital servos to react 5x faster with tighter holding torque.
+## 3. Key Innovations from Max Imagination's ESP-FLUTTER (Video Breakdown)
 
-#### 2. FPV Micro AIO (STM32F411 with Integrated Gyro & ELRS) (The Ultimate Flight Experience)
-* **Active Gyroscopic Damping:** Real flapping butterflies are buffeted by wind and cyclic flapping torque. An onboard 6-axis gyroscope (BMI270) running an active PID damping loop automatically adjusts servo angles to counter gusts in real time. The butterfly stops wobbling and tracks straight as if flying on invisible rails.
-* **ExpressLRS (ELRS) Integration:** Long-range, zero-jitter 250Hz/500Hz digital radio link built right onto the board.
+The YouTube video **"Make an ESP32 RC Bionic Butterfly That Flies | ESP-FLUTTER" by Max Imagination** ([https://youtu.be/5Le4I-1Pf9I](https://youtu.be/5Le4I-1Pf9I)) presents several revolutionary breakthroughs that elevate the bionic butterfly from a simple hobby toy to a high-performance biomimetic robot.
 
-> **Recommendation:** 
-> * **Phase 1 (Today):** Build with the **Arduino Pro Micro** using [`Bionic_Butterfly_Enhanced.ino`](./Bionic_Butterfly_Enhanced.ino) to get your model flying quickly.
-> * **Phase 2 (Performance Upgrade):** Swap in a **Seeed Studio XIAO ESP32-C3** to eliminate the external receiver and cut 5g of dead weight, or an **F4 AIO with Gyro** for active auto-leveling stabilization.
+### 1. Differential-Amplitude Steering
+* **Previous Technique (S-DiY / TruongVanSu91):** Shifted the mean servo neutral angle (`center ± offset`). Both wings flapped with identical amplitude, which often caused wing stall, altitude drop, or violent roll snaps.
+* **Max Imagination's Innovation:** The stroke depth is dynamically varied between wings:
+  $$\text{Wing Delta} = \text{SteerNorm} \times \text{BaseAmplitude} \times 0.45$$
+  $$\text{Left Amplitude} = \text{BaseAmplitude} + \text{Wing Delta}$$
+  $$\text{Right Amplitude} = \text{BaseAmplitude} - \text{Wing Delta}$$
+  When steering right, the left wing flaps through a larger arc while the right wing flaps through a shallower arc. This delivers immediate, banked turning authority without wing flutter or stalling!
+
+### 2. Automatic Turn Lift Boost
+* When an ornithopter banks, aerodynamic lift tilts sideways, causing the aircraft to drop.
+* Max added an automatic mathematical boost:
+  $$\text{TurnLiftBoost} = 1.0 + (|\text{SteerNorm}| \times 0.15)$$
+  At full stick deflection, flap amplitude automatically surges by **+15%**, providing the extra vertical thrust needed to hold altitude in tight turns.
+
+### 3. Smartphone Web App Controller (Zero Added RX Weight!)
+* The ESP32-C3 hosts its own Wi-Fi Access Point (`Butterfly_RC`).
+* By opening `http://192.168.4.1` on any iPhone, Android, or laptop, pilots get:
+  * Full virtual on-screen touch joystick
+  * Vertical throttle slider
+  * Live battery voltage telemetry
+  * LED lighting mode switcher (Off / Breath / Strobe)
+  * Eliminates the external RC receiver completely, shaving **5.3 grams** (~10% of total aircraft weight)!
+
+### 4. Night-Flight Flexible LED Filaments
+* Integrates ultra-thin **flexible 3V LED filaments** (the flexible glowing wire filaments from decorative Edison bulbs, ~130mm or 300mm long, weighing under 0.3g).
+* The filament is bonded directly along the carbon fiber leading edge or wing ribs, producing a magical bioluminescent glow in dusk or dark indoor environments!
 
 ---
 
-## 3. Complete Bill of Materials (Procurement Inventory)
+## 4. Complete Bill of Materials (Procurement Inventory)
 
-### A. Electronics & Actuation
-* [ ] **1× Arduino Pro Micro (ATmega32U4):** 5V / 16MHz, USB-C (recommended) or Micro-USB.
+### A. Flight Electronics (Choose Track 1 or Track 2)
+
+#### Track 1: Arduino Pro Micro (Classic RC Transmitter)
+* [ ] **1× Arduino Pro Micro (ATmega32U4):** 5V / 16MHz, USB-C.
+* [ ] **1× Micro RC Receiver:** **FlySky FS-A8S** (PPM/i-Bus, 1.2g) or **Radiomaster RP1 / BetaFPV ELRS** (0.5g).
+
+#### Track 2: Seeed Studio XIAO ESP32-C3 (Smartphone Web App + ESP-NOW + ELRS) - *Recommended*
+* [ ] **1× Seeed Studio XIAO ESP32-C3:** 32-bit RISC-V @ 160MHz, built-in Wi-Fi & Bluetooth, 1.2g.
+* [ ] **Resistors for Battery Divider:** 1× 49kΩ (or 47kΩ) and 1× 18kΩ (0805 SMD or 1/8W through-hole) connected to D2.
+
+### B. Common Actuation & Power Components
 * [ ] **2× Micro Flapping Servos:**
   * *Option A (High-Voltage Direct 2S - Best):* **C-Torque 9g HV Bionic Butterfly Servos** or **PTK 7465 MG-D HV** (Digital Metal Gear, 0.06s/60°, 2.5 kg·cm torque).
   * *Option B (Standard 5V-6V):* **EMAX ES08MD II** or **TowerPro MG90S** (requires 5V/6V 3A Micro BEC).
-* [ ] **1× Micro RC Receiver:** **FlySky FS-A8S** (PPM/i-Bus, 1.2g) or **Radiomaster RP1 / BetaFPV ELRS** (0.5g).
 * [ ] **1× Power Decoupling Capacitor:** **470µF – 1000µF Low-ESR Electrolytic Capacitor (10V or 16V)**.
 * [ ] **2–3× Flight Batteries:** **2S 7.4V 250mAh – 350mAh LiPo (30C–75C)** (e.g. Tattu 300mAh 2S 75C or GNB 2S 350mAh) with XT30 or JST-PH 2.0 connector.
-* [ ] **1× Micro Power Switch:** Ultra-light SPDT slide switch (or direct battery plug).
-* [ ] **1× Micro 5V/6V 3A BEC:** *(Only needed if using standard 5V-6V servos)*.
+* [ ] **1× Micro Power Switch:** Ultra-light SPDT slide switch.
+* [ ] **Flexible LED Filaments (Night Flight):** 2× 3V 130mm or 300mm ultra-flexible LED filaments (Ice Blue, Warm White, or Pink) + 33Ω current limiting resistor.
 
-### B. Airframe & Wing Structure
-* [ ] **1× 3D Printed Central Chassis:** `FC Mount V5.STL` (PETG or LW-PLA).
-* [ ] **2× 3D Printed Wing Drive Arms:** `ARMV5.STL` (1× normal, 1× mirrored in slicer; 100% solid infill).
-* [ ] **Carbon Fiber Solid Rods:**
+### C. Airframe & Wing Materials
+* [ ] **1× 3D Printed Central Chassis:** `FC Mount V5.STL` (PETG).
+* [ ] **2× 3D Printed Wing Drive Arms:** `ARMV5.STL` (1× normal, 1× mirrored; 100% solid infill).
+* [ ] **Solid Carbon Fiber Rods:**
   * **1.5 mm OD × 500 mm:** 1 rod (cut into 2× 200 mm leading edge spars).
   * **1.0 mm OD × 1000 mm:** 1–2 rods (cut into 4× 150 mm forewing ribs).
   * **0.8 mm OD × 1000 mm:** 1 rod (cut into 4× 140 mm hindwing and flexible struts).
 * [ ] **Wing Membrane:** **0.5 oz (20–30 g/m²) Ripstop Nylon** or **15–20 µm Mylar / BoPET Film** (~0.5 m²).
 * [ ] **Lashing Thread:** **Braided Kevlar thread (30–50 lb)** or **0.15 mm Dyneema / Spectra fishing line**.
-* [ ] **Hardware:** 4× M2 × 6mm or M2 × 8mm micro self-tapping screws for servo mounting.
-
-### C. Adhesives & Workshop Consumables
-* [ ] **Thin Cyanoacrylate (CA) Glue** (wicking into thread lashings).
-* [ ] **Medium Cyanoacrylate (CA) Glue** (bonding carbon rods into 3D-printed arm sockets).
-* [ ] **CA Accelerator / Kicker Spray** (instant curing).
-* [ ] **3M 77 Multipurpose Spray Adhesive** or **3 mm high-tack double-sided tissue tape** (attaching membrane to carbon rods).
-* [ ] **28 AWG / 30 AWG Ultra-flexible Silicone Wire** (Black, Red, Yellow).
-* [ ] **Heat shrink tubing assortment** (1.5mm, 2.5mm, 4.0mm).
+* [ ] **Adhesives:** Thin CA, Medium CA, CA Kicker/Activator spray, and 3M 77 spray adhesive or 3mm double-sided tissue tape.
 
 ---
 
-## 4. Phase 1: 3D Printing & Component Preparation
+## 5. Phase 1: 3D Printing & Component Preparation
 
 ```
-   +-------------------------------------------------------+
-   |                  3D PRINTING OVERVIEW                 |
-   |                                                       |
-   |  [ FC Mount V5 ]           [ ARMV5 - Right ]          |
-   |  (Central Chassis)         (Print as-is)              |
-   |  Material: PETG            Material: PETG (100%)      |
-   |                                                       |
-   |                            [ ARMV5 - Left ]           |
-   |                            (Mirror in slicer!)        |
-   |                            Material: PETG (100%)      |
-   +-------------------------------------------------------+
+   [ FC Mount V5 ]           [ ARMV5 - Right ]          [ ARMV5 - Left ]
+   (Central Chassis)         (Print as-is)              (Mirror in slicer!)
+   Material: PETG (20%)      Material: PETG (100%)      Material: PETG (100%)
 ```
 
-### Slicer Configuration
-1. **Chassis (`FC Mount V5.STL`):**
-   * **Material:** PETG (recommended for impact toughness and vibration damping) or Tough PLA.
-   * **Layer Height:** 0.16 mm or 0.20 mm.
-   * **Walls / Perimeters:** 2 to 3.
-   * **Infill:** 15% – 20% Gyroid.
-   * **Target Weight:** ~5.0 g – 5.5 g.
+1. **Chassis (`FC Mount V5.STL`):** Print 1× in PETG at 0.16mm or 0.20mm layer height, 20% gyroid infill. Weight: ~5.5g.
 2. **Wing Hub Arms (`ARMV5.STL`):**
-   * **CRITICAL:** The wing hub arm is **asymmetric**.
+   * **CRITICAL:** The wing hub arm is chiral.
      * **Right Arm:** Load `ARMV5.STL` and slice as-is.
-     * **Left Arm:** Load `ARMV5.STL`, right-click in your slicer (Cura, PrusaSlicer, Bambu Studio, OrcaSlicer) -> **Mirror along X or Y axis**, then slice.
-   * **Infill:** **100% Solid** (or 5+ perimeters). This part absorbs cyclic bending stress on every flap.
-   * **Target Weight:** ~3.0 g per arm.
-3. **Post-Print Cleanup:**
-   * Test-fit a 1.5mm carbon fiber rod into the leading edge socket of each arm. If snug, lightly clean with a 1.5mm drill bit spun by hand.
-   * Clear any stringing inside the servo pockets of `FC Mount V5`.
+     * **Left Arm:** Load `ARMV5.STL`, right-click -> **Mirror along X or Y axis**, then slice.
+   * **Infill:** **100% Solid** (or 5+ perimeters). Weight: ~3.0g each.
 
 ---
 
-## 5. Phase 2: Wing Skeleton & Aerodynamic Skinning
+## 6. Phase 2: Wing Skeleton, Glowing LEDs & Aerodynamic Skinning
 
 ```
-                 Leading Edge Spar (1.5mm Carbon Rod)
-             ====================================================\
-            /  Forewing Rib 1 (1.0mm)                             \
-           / ------------------------------------------\           \
-   [HUB] =<    Forewing Rib 2 (1.0mm)                   \           ) Forewing
-     ||    \ -------------------------------------\      )         /
-     ||     \  Forewing Rib 3 (1.0mm)              )    /         /
-     ||      \ ------------------------------\    /    /         /
-     ||       \                               \  /    /         /
-     ||        \ Hindwing Spar (0.8mm)         \/    /         /
-     ||         \ --------------------\             /         /
-     ||          \ Diagonal (0.8mm)    ) Hindwing  /         /
-     ||           \ ------------------/           /         /
-                   \                             /         /
-                    \---------------------------/---------/
+                 Leading Edge Spar (1.5mm Carbon Rod) + Flexible LED Filament
+             ===================================================================\
+            /  Forewing Rib 1 (1.0mm)                                            \
+           / ------------------------------------------\                          \
+   [HUB] =<    Forewing Rib 2 (1.0mm)                   \                          ) Forewing
+     ||    \ -------------------------------------\      )                        /
+     ||     \  Forewing Rib 3 (1.0mm)              )    /                        /
+     ||      \ ------------------------------\    /    /                        /
+     ||       \                               \  /    /                        /
+     ||        \ Hindwing Spar (0.8mm)         \/    /                        /
+     ||         \ --------------------\             /                        /
+     ||          \ Diagonal (0.8mm)    ) Hindwing  /                        /
+     ||           \ ------------------/           /                        /
+                   \                             /                        /
+                    \---------------------------/------------------------/
 ```
 
-### Step 1: Prepare the Wing Template
-1. Open [`wing design.jpeg`](./wing%20design.jpeg).
-2. Print the image on standard A4 paper scaled to fit portrait orientation (~260 mm height × 175 mm width per wing).
-3. Secure the paper template to a flat, rigid building board (corkboard, balsa board, or dense foam board).
-4. Lay a sheet of clear plastic food wrap or wax paper over the template to prevent glue from adhering to the paper.
-
-### Step 2: Cut & Fit Carbon Fiber Rods
-1. **Leading Edge Spar:** Cut a 1.5 mm carbon fiber rod to follow the upper outer curve (~190 mm – 200 mm). Insert the root end into the upper socket of the 3D-printed `ARMV5` arm.
-2. **Forewing Radiating Ribs:** Cut four 1.0 mm carbon rods matching the lines radiating from the root hub toward the wing margin (~120 mm to 160 mm).
-3. **Hindwing Spar & Struts:** Cut 0.8 mm carbon rods for the lower wing outline and cross-braces (~110 mm to 150 mm).
-4. Lightly scuff the rod tips and root ends with 400-grit sandpaper to promote adhesive bonding.
-
-### Step 3: Secure the Hub & Lash Joints
-1. Insert the carbon rods into the matching sockets of the `ARMV5` arm using **Medium CA glue**.
-2. At all junctions where carbon rods intersect or meet the hub, tightly wrap **4 to 6 turns of braided Kevlar thread** (or Dyneema line).
-3. Apply a single drop of **Thin CA glue** onto the thread; capillary action will instantly saturate the fibers.
-4. Mist with **CA Accelerator / Kicker** for an instantaneous, unbreakable joint.
-5. Repeat for the mirrored left wing arm.
-
-### Step 4: Skin the Wing Membrane
-1. Cut a piece of **0.5 oz Ripstop Nylon** or **15 µm Mylar film** roughly 20 mm larger than the wing outline.
-2. If using **3M 77 Spray Adhesive**:
-   * Lightly mist the back of the carbon fiber skeleton from 30 cm away (avoid heavy spraying to keep weight minimal).
-   * Wait 60 seconds until tacky.
-   * Carefully lay the membrane down onto the skeleton, working from the leading edge backward toward the trailing edge, smoothing out all wrinkles.
-3. If using **3mm Double-Sided Tape**:
-   * Apply tape along the carbon rods, peel backing, and roll the membrane smoothly into place.
-4. **Trimming:**
-   * Trim excess material along the perimeter leaving a 2 mm margin using a sharp #11 hobby knife.
-   * If using Ripstop Nylon, run the tip of a fine hot soldering iron along the perimeter to heat-seal the edges against fraying.
+1. **Template:** Print [`wing design.jpeg`](./wing%20design.jpeg) on A4 paper scaled to fit portrait orientation. Fasten to a flat building board and cover with wax paper or cling film.
+2. **Cutting Rods:** Cut the 1.5mm leading edge spar (~190–200mm), 1.0mm forewing ribs (~120–160mm), and 0.8mm hindwing spars (~110–150mm).
+3. **Lashing & Glue:** Insert rods into `ARMV5` sockets with Medium CA. Wrap junctions with 4–6 turns of Kevlar thread, wick with Thin CA, and mist with kicker.
+4. **Installing Flexible LED Filaments (Optional for Night Flying):**
+   * Lay a 130mm 3V flexible LED filament along the 1.5mm leading edge carbon rod.
+   * Secure with tiny drops of Thin CA every 30mm.
+   * Solder ultra-thin 32 AWG enamel wire to the filament pads and route back to the central chassis.
+5. **Skinning:** Lightly spray the skeleton with 3M 77 adhesive, lay Ripstop Nylon or Mylar film smoothly from leading edge to trailing edge, and trim excess with a hot soldering iron tip or #11 knife.
 
 ---
 
-## 6. Phase 3: Servo Mechanics & Chassis Assembly
+## 7. Phase 3: Servo Mechanics & Chassis Assembly
 
-```
-         +---------------------------------------------+
-         |            [ FC Mount V5 Chassis ]          |
-         |                                             |
-         |   [ Left Servo ]           [ Right Servo ]   |
-         |   (Spline Upward)          (Spline Upward)  |
-         |         |                         |         |
-         |   [ Horn at 90° ]           [ Horn at 90° ] |
-         |         |                         |         |
-         |   [ ARMV5 Left ]            [ ARMV5 Right ] |
-         +---------------------------------------------+
-```
-
-### Step 1: Electrically Center the Servos
-1. **Do not install servo horns yet.**
-2. Connect your Arduino Pro Micro or a servo tester to send a neutral **1500 µs pulse**.
-3. Power the servos so they seek their true electrical center.
-4. Mount the single-arm servo horn onto the servo output spline as close to a perpendicular **90° neutral angle** as the teeth permit.
-5. Secure the horn with its center retention screw.
-
-### Step 2: Install Servos into Chassis
-1. Slide the two micro servos into the designated pockets of `FC Mount V5`.
-2. Secure each servo using two M2 × 6mm or M2 × 8mm self-tapping micro screws through the mounting tabs.
-3. Ensure both servo output splines are aligned along the same horizontal rotational axis.
-
-### Step 3: Attach Wing Drive Arms
-1. Mount the prepared wing assemblies (`ARMV5 Left` and `ARMV5 Right`) onto the servo horns.
-2. Fasten them using M2 hardware or tie-wire through the horn mounting holes.
-3. Manually cycle the wings gently through their full ±65° range to confirm zero mechanical binding against the chassis.
+1. **Center Servos:** Power servos with 1500 µs pulse from your flight controller before attaching horns.
+2. **Mount Horns:** Install single-arm horns perpendicular to the servo body at 90° neutral.
+3. **Chassis Installation:** Mount servos into `FC Mount V5` using M2 self-tapping screws.
+4. **Attach Arms:** Secure the prepared left and right wing assemblies to the servo horns. Manually cycle wings through ±65° to verify zero mechanical binding.
 
 ---
 
-## 7. Phase 4: Electrical Wiring & Power Conditioning
+## 8. Phase 4: Electrical Wiring & Power Conditioning
+
+### Wiring Diagram: Seeed Studio XIAO ESP32-C3 (Track 2)
 
 ```
                   +-----------------------------------+
@@ -246,140 +201,92 @@ The baseline build uses an **Arduino Pro Micro (ATmega32U4, 8-bit AVR @ 16MHz)**
      +---------+---------+                     |                   |
                |                               |                   |
                +--------------------+          |                   |
+               | (If HV Servos)     |          |                   |
+          +----+----+          +----+----+     |                   |
+          | Servos  |          | 49k Res |     |                   |
+          | V+ Rail |          +----+----+     |                   |
+          +----+----+               |          |                   |
+               |               (D2 Pin)        |                   |
                |                    |          |                   |
-        (If HV Servos)       (If 5V-6V)        |                   |
-               |            [5V/6V BEC]        |                   |
+               |               +----+----+     |                   |
+               |               | 18k Res |     |                   |
+               |               +----+----+     |                   |
                |                    |          |                   |
-          +----+----+               |     +----+----+              |
-          | Servos  |               |     | Servos  |              |
-          | V+ Rail |               |     | GND Rail|              |
-          +----+----+               |     +----+----+              |
-               |                    |          |                   |
-               +-------+------------+          +---------+---------+
-                       |                                 |
-                       | (8.4V or BEC 5V)                |
-              +--------+--------+                        |
-              | Pro Micro 'RAW' |                        |
-              |    (or VCC)     |                        |
-              +--------+--------+                        |
-                       |                                 |
-              +--------+--------+               +--------+--------+
-              | Pro Micro 'VCC' |               | Pro Micro 'GND' |
-              +--------+--------+               +--------+--------+
-                       | 5.0V Regulated                  | Common GND
-                       |                                 |
-               +-------+-------+                 +-------+-------+
-               |  FS-A8S VCC   |                 |  FS-A8S GND   |
-               +---------------+                 +---------------+
+               +--------------------+----------+---------+---------+
+               |                                         |
+       +-------+-------+                         +-------+-------+
+       | XIAO '5V' Pin |                         | XIAO 'GND' Pin|
+       +-------+-------+                         +-------+-------+
 
-     SIGNAL WIRING:
-     * FS-A8S PPM Signal (White/Yellow) ----> Arduino Pin 2 (INT1)
-     * Left Servo Signal (Orange/Yellow) ---> Arduino Pin 4 (PWM)
-     * Right Servo Signal (Orange/Yellow) --> Arduino Pin 5 (PWM)
-     * Status LED (Optional) ---------------> Arduino Pin 6 (via 220Ω resistor)
+     SIGNAL CONNECTIONS:
+     * Left Servo Signal  ---------------> XIAO Pin D0
+     * Right Servo Signal ---------------> XIAO Pin D1
+     * Battery Voltage Divider ----------> XIAO Pin D2
+     * LED Filament Gate (via 33Ω res) --> XIAO Pin D3
 ```
 
-> [!CAUTION]
-> **Brownout & Voltage Spike Protection:**
-> Flapping wing servos generate high inductive back-EMF spikes when changing stroke directions.
-> * Always solder a **470µF to 1000µF Low-ESR capacitor** directly across the main power bus near the servos.
-> * If using standard 5V/6V servos (like MG90S or ES08MD), **do not feed them 8.4V directly**. Use a lightweight 5V/6V 3A Micro BEC.
-> * If using 8.4V HV servos (like C-Torque 9g HV or PTK 7465 MG-D), connect them directly to the battery rail with the capacitor in parallel.
+---
+
+## 9. Phase 5: Firmware Configuration & Flashing
+
+### Option A: Arduino Pro Micro (`Bionic_Butterfly_Enhanced.ino`)
+1. Open [`Bionic_Butterfly_Enhanced.ino`](./Bionic_Butterfly_Enhanced.ino) in Arduino IDE.
+2. Select board: **Arduino Leonardo / Micro**.
+3. Verify `#define USE_UPDATED_PINS 1` (Pin 2 PPM, Pin 4 Left Servo, Pin 5 Right Servo).
+4. Upload and open Serial Monitor at 115200 baud.
+
+### Option B: Seeed Studio XIAO ESP32-C3 (`ESP32_C3_Firmware/ESP32_Bionic_Butterfly.ino`)
+1. Install **ESP32 by Espressif** board package in Arduino IDE.
+2. Install `ESP32Servo` library.
+3. Select board: **Seeed Studio XIAO ESP32C3**.
+4. Upload [`ESP32_Bionic_Butterfly.ino`](./ESP32_C3_Firmware/ESP32_Bionic_Butterfly.ino).
 
 ---
 
-## 8. Phase 5: Firmware Configuration & Flashing
+## 10. Phase 6: Flying via Smartphone Web App or RC Transmitter
 
-The firmware is located at [`Bionic_Butterfly_Enhanced.ino`](./Bionic_Butterfly_Enhanced.ino).
-
-### Flashing Procedure
-1. Open **Arduino IDE** (version 1.8.19 or 2.x).
-2. Install the required libraries via **Sketch -> Include Library -> Manage Libraries...**:
-   * `Servo` (built-in standard library)
-   * `PPMReader` by Dimitar Kovachev
-3. Select board: **Tools -> Board -> Arduino AVR Boards -> Arduino Leonardo / Micro** (or *SparkFun Pro Micro 5V/16MHz*).
-4. Select the matching serial port under **Tools -> Port**.
-5. Check lines 28–36 of [`Bionic_Butterfly_Enhanced.ino`](./Bionic_Butterfly_Enhanced.ino):
-   ```cpp
-   #define USE_UPDATED_PINS 1
+### Flying via Smartphone Web App (ESP32-C3)
+1. Power on the butterfly.
+2. Open your phone's Wi-Fi settings and connect to **`Butterfly_RC`** (Password: **`12345678`**).
+3. Open Safari or Chrome and navigate to:
    ```
-   * Set `USE_UPDATED_PINS 1` for **Pin 2 (PPM), Pin 4 (Left Servo), Pin 5 (Right Servo)**.
-   * Set `USE_UPDATED_PINS 0` if wired according to the legacy diagram (Pin 3 & Pin 10).
-6. Click **Upload**.
-7. Open **Serial Monitor** at **115200 baud** to verify startup telemetry:
+   http://192.168.4.1
    ```
-   ==================================================
-     RC BIONIC BUTTERFLY CONTROLLER v2.0 READY      
-     Left Pin: 4 | Right Pin: 5
-   ==================================================
-   ```
+4. **Controls:**
+   * **Left Slider:** Proportional throttle (0% to 100%).
+   * **Right Touch Joystick:** Steering (left/right differential flapping) and Pitch (up/down bias).
+   * **LED Button:** Toggles Off, Breathing, and Night Strobe modes.
+   * **Arm/Disarm Button:** Instantly centers and locks wings for safe handling.
+
+### Flying via RC Transmitter (FlySky FS-i6 / EdgeTX)
+* **CH1 (Aileron):** Differential-amplitude steering.
+* **CH2 (Elevator):** Pitch bias.
+* **CH3 (Throttle):** Flap frequency and amplitude.
+* **CH5 (Pot):** Steering fine trim.
+* **CH7 (Switch):** Perch flutter mode.
+* **CH8 (Switch):** Night LED mode toggle.
 
 ---
 
-## 9. Phase 6: Radio Transmitter Setup & Channel Calibration
+## 11. Phase 7: Pre-Flight Checks, CG Balancing & Maiden Flight
 
-### Channel Assignment (FlySky FS-i6 / FS-i6X / EdgeTX)
-* **Channel 1 (Aileron / Roll):** Wing steering trim (differential roll).
-* **Channel 2 (Elevator / Pitch):** Wing pitch bias (symmetric tilt up/down).
-* **Channel 3 (Throttle):** Flapping frequency and amplitude modulation.
-* **Channel 5 (Aux Pot VRA):** Steering fine trim pot.
-* **Channel 6 (Aux Pot VRB):** Pitch trim bias pot.
-* **Channel 7 (Switch SWA/SWC):** Perch mode enable switch (gentle fluttering when stationary).
-* **Channel 8 (Switch SWD):** Flight Mode toggle:
-  * `LOW` = **Biomimetic Asymmetric Mode** (High-lift, faster downstroke).
-  * `HIGH` = **Pure Sine Wave Mode** (Smooth, classic sine).
-
-### Transmitter Setup Settings
-1. Set Model Type: **Airplane / Glider (Acro)**.
-2. Endpoints (E.POINT): Set all channels to **100%** (1000 µs to 2000 µs).
-3. Dual Rates & Expo:
-   * **CH1 (Aileron):** Rate 100%, Expo +30% (softens stick feel around center).
-   * **CH2 (Elevator):** Rate 100%, Expo +25%.
+1. **Center of Gravity (CG):** Balance point must be at **35% to 40% of the mean wing chord** from the leading edge root. Slide battery forward or backward until level.
+2. **Pre-Flight Function Check:**
+   * Verify wings hold 1500µs horizontal neutral at zero throttle.
+   * Move steering stick right $\rightarrow$ Left wing amplitude increases, Right wing amplitude decreases.
+   * Verify Failsafe: Switching off transmitter smoothly glides wings into a +18° upward "V" dihedral.
+3. **Maiden Flight:** Launch indoors or in dead calm wind. Advance throttle to 65%, gently push forward level with the horizon, and fly using small, gentle stick inputs.
 
 ---
 
-## 10. Phase 7: Pre-Flight Checks, CG Balancing & Maiden Flight
-
-```
-                 <--- 35% - 40% Chord --->
-                 +-----------------------+
-   [Nose] =======|==========[ CG ]=======|=======> [Tail / Trailing Edge]
-                 +-----------------------+
-                     ^ Balance Point ^
-```
-
-### Step 1: Center of Gravity (CG) Balancing
-* The Center of Gravity must sit at **35% to 40% of the mean wing chord** measured from the leading edge root.
-* Support the butterfly gently on two fingertips under the wing root arm at the 35% chord line.
-* If the tail drops: Slide the 2S LiPo battery forward toward the nose.
-* If the nose drops: Slide the LiPo battery backward toward the servos.
-* Secure the battery firmly with micro velcro and a lightweight silicone band.
-
-### Step 2: Bench Function Check
-1. Turn on the transmitter with throttle at zero.
-2. Power on the butterfly. The status LED should light up solid and the wings should hold horizontal neutral (1500 µs).
-3. **Throttle Test:** Advance throttle slowly to 20%. The wings should begin a gentle, smooth flutter. At 80% throttle, they should flap with high frequency and full amplitude without gear chatter.
-4. **Steering Test:** Push the right stick right. The left wing should bias upward and right wing downward.
-5. **Pitch Test:** Push the right stick forward (pitch down). Both wings should bias slightly downward.
-6. **Failsafe Test:** At 30% throttle, switch off the transmitter. The wings must smoothly transition into an upward **"V" dihedral glide posture (approx +18°)** and stop flapping within 0.5 seconds.
-
-### Step 3: Maiden Flight Procedure
-1. Choose an indoor gymnasium, large hall, or a completely calm outdoor evening (zero wind is essential for initial trimming).
-2. Hold the central chassis between thumb and index finger from underneath.
-3. Advance throttle smoothly to **60%–70%**.
-4. Gently launch the butterfly straight and level into the air with a smooth forward push (do not throw forcefully).
-5. Use small, gentle stick inputs to trim straight-line flight using the Channel 5 pot.
-6. To descend, reduce throttle smoothly to 15%–20%; to glide, cut throttle to zero so the wings enter the stable "V" dihedral glide.
-
----
-
-## 11. Troubleshooting & Flight Tuning
+## 12. Troubleshooting & Flight Tuning
 
 | Symptom | Probable Cause | Corrective Action |
 | :--- | :--- | :--- |
 | **Butterfly flaps violently but doesn't climb** | Wing membrane is too stiff, or rods lack flex | Verify leading edge is 1.5mm and ribs are 0.8mm–1.0mm. Ensure membrane has slight trailing-edge billow. |
 | **Microcontroller reboots during flapping** | Inductive voltage sag / brownout | Solder a 470µF–1000µF Low-ESR capacitor directly across the servo power rail. |
-| **Butterfly rolls hard to one side** | Asymmetric wing construction or servo centering | Check wing weights on a precision scale. Trim out differential angle using CH5 pot or sub-trim. |
+| **Butterfly drops altitude during turns** | Missing turn lift compensation | In firmware, verify `TURN_LIFT_BOOST` is enabled (automatically boosts flap amplitude by +15% during steering). |
+| **Butterfly rolls hard to one side** | Asymmetric wing construction or servo centering | Check wing weights on a precision scale. Trim out differential angle using CH5 pot or web app trim slider. |
 | **Servos buzz loudly and run hot at full stroke** | Servo travel clipping against physical limit | Increase `SERVO_US_MIN` and decrease `SERVO_US_MAX` in firmware, or reduce `MAX_FLAP_AMP_DEG`. |
-| **Butterfly dives immediately upon launch** | Nose-heavy (CG too far forward) or negative pitch bias | Slide LiPo backward toward wing trailing edge, or increase pitch trim via CH6 pot. |
+| **Butterfly dives immediately upon launch** | Nose-heavy (CG too far forward) or negative pitch bias | Slide LiPo backward toward wing trailing edge, or increase pitch trim via CH6 pot / web app. |
 | **Butterfly stalls, wobbles, and falls backward** | Tail-heavy (CG too far aft) | Slide LiPo forward toward the nose until the model balances at 35%–40% chord. |

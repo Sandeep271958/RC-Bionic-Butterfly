@@ -1,26 +1,35 @@
 /*
  * ==============================================================================
- * PROJECT: ENHANCED RC BIONIC BUTTERFLY (BIOMIMETIC FLIGHT CONTROLLER)
- * BASED ON: S-DiY / TruongVanSu91 & CTorque Architecture
- * VERSION: 2.0 (HIGH-RESPONSIVENESS & ANTI-CLIPPING EDITION)
+ * PROJECT: ENHANCED RC BIONIC BUTTERFLY (BIOMIMETIC FLIGHT CONTROLLER v2.5)
+ * BASED ON: S-DiY / TruongVanSu91, CTorque Architecture & Max Imagination ESP-FLUTTER
  * ==============================================================================
  *
- * KEY IMPROVEMENTS OVER VERSION 1.0:
- * 1. Jitter-free microsecond delta-time (dt) flapping generator (no loop jitter).
- * 2. High-resolution microsecond servo pulses (Servo.writeMicroseconds) for
- *    buttery smooth wing motion without 1-degree servo gear chatter.
- * 3. Dynamic Throttle Scaling: Scales BOTH flapping frequency (1.2 - 4.2 Hz)
- *    and amplitude (25° - 65°), giving crisp, immediate throttle responsiveness.
- * 4. Biomimetic Asymmetric Downstroke: Faster power downstroke (vortex lift)
- *    and cushioned recovery upstroke for real butterfly flight efficiency.
- * 5. Dynamic Headroom & Anti-Clipping: Offsets from steering and pitch automatically
- *    soft-compress flap amplitude near travel limits to prevent servo stalling.
- * 6. Aerodynamic Dihedral Gliding Failsafe: Glides in a stable "V" dihedral 
- *    rather than flat stalling when signal is lost.
- * 7. Expo (Exponential) stick curves for silky smooth center-stick trim and 
- *    aggressive full-deflection turn agility.
- * 8. Pin Config Switcher: Pre-configured for either Updated Code (Pins 4 & 5) 
- *    or Legacy Schematic (Pins 3 & 10).
+ * KEY HIGHLIGHTS & NEW INNOVATIONS:
+ * 1. DIFFERENTIAL-AMPLITUDE STEERING:
+ *    Instead of merely shifting the mean servo angle, steering dynamically varies 
+ *    the flapping amplitude between left and right wings (e.g. left flaps 80°, 
+ *    right flaps 50°). This produces natural, sharp, high-agility yaw/roll turns!
+ * 2. AUTOMATIC TURN LIFT BOOST:
+ *    During banked turns, aerodynamic lift is tilted sideways. The controller 
+ *    automatically injects a +15% flap amplitude boost during hard steering so 
+ *    the butterfly maintains altitude without dipping or stalling.
+ * 3. ZERO-THROTTLE IDLE LEAN:
+ *    Below 5% throttle, stick inputs do not flap the wings; instead, they pose 
+ *    the wings in a smooth, organic resting lean (up to ±15°).
+ * 4. DETERMINISTIC MICROSECOND TIMEBASE (dt):
+ *    Jitter-free flapping engine synchronized to real time, completely immune to 
+ *    serial print overhead or receiver frame delays.
+ * 5. HIGH-RESOLUTION MICROSECOND SERVO PULSES:
+ *    Drives servos with Servo.writeMicroseconds(us) for buttery smooth stroke arcs 
+ *    without 1-degree gear rattle.
+ * 6. BIOMIMETIC ASYMMETRIC FLAP:
+ *    Cycloidal power downstroke (generating high leading-edge vortex lift) and 
+ *    cushioned recovery upstroke for maximum climb efficiency.
+ * 7. GLOWING NIGHT FLIGHT LED EFFECTS:
+ *    Drives ultra-light flexible LED filaments or status LED with Solid, Breathing, 
+ *    and Strobe modes.
+ * 8. FAILSAFE WITH AERODYNAMIC "V" DIHEDRAL GLIDE:
+ *    Smoothly transitions wings into a positive dihedral (+18°) when signal is lost.
  * ==============================================================================
  */
 
@@ -30,7 +39,7 @@
 // ==============================================================================
 // 1. PIN CONFIGURATION (Select your wiring setup)
 // ==============================================================================
-// Set to 1 if wired according to code comments (Left = D4, Right = D5)
+// Set to 1 if wired according to updated code (Left = D4, Right = D5)
 // Set to 0 if wired according to legacy circuit.jpeg (Left = D3, Right = D10)
 #define USE_UPDATED_PINS 1
 
@@ -44,34 +53,33 @@
   const byte PIN_SERVO_RIGHT  = 10;// Right wing servo signal
 #endif
 
-const byte PIN_STATUS_LED     = 6; // Onboard or external status LED
-const byte PIN_VBAT_SENSE     = A0;// Optional: Battery voltage divider (optional)
-const byte PPM_CHANNEL_COUNT  = 8; // FlySky FS-i6 / FS-A8S typical channels
+const byte PIN_STATUS_LED     = 6; // PWM pin for Status LED or Flexible LED filament
+const byte PIN_VBAT_SENSE     = A0;// Optional: 2S battery voltage divider (49k/18k)
+const byte PPM_CHANNEL_COUNT  = 8; // Standard 8CH RC receiver
 
 // ==============================================================================
 // 2. FLIGHT ENVELOPE & SERVO GEOMETRY TUNING
 // ==============================================================================
-// Microsecond timing calibration (standard 1500us center, 500-2500us range)
-const int SERVO_US_MIN        = 600;   // Physical minimum limit
-const int SERVO_US_MAX        = 2400;  // Physical maximum limit
+const int SERVO_US_MIN        = 600;   // Physical minimum limit (microseconds)
+const int SERVO_US_MAX        = 2400;  // Physical maximum limit (microseconds)
 const int SERVO_US_CENTER     = 1500;  // Neutral / horizontal wing position
 
-// Flapping limits (in degrees converted to microseconds)
-// Standard 1000us span ~ 90 degrees (approx 11.1 us per degree)
-const float US_PER_DEGREE      = 11.11f; 
-const float MAX_FLAP_AMP_DEG   = 65.0f; // Max flapping half-amplitude (degrees)
-const float MIN_FLAP_AMP_DEG   = 20.0f; // Soft-flutter half-amplitude (degrees)
-const float MAX_STEER_DEG      = 18.0f; // Max differential roll trim (degrees)
-const float MAX_PITCH_DEG      = 18.0f; // Max symmetric pitch trim (degrees)
-const float DIHEDRAL_GLIDE_DEG = 18.0f; // Upward V-angle during glide (degrees)
+const float US_PER_DEGREE      = 11.11f; // Standard ~1000us span per 90 degrees
+const float MAX_FLAP_AMP_DEG   = 65.0f;  // Max flapping half-amplitude (degrees)
+const float MIN_FLAP_AMP_DEG   = 20.0f;  // Soft-flutter half-amplitude (degrees)
+const float MAX_PITCH_DEG      = 16.0f;  // Max symmetric pitch trim (degrees)
+const float DIHEDRAL_GLIDE_DEG = 18.0f;  // Upward V-angle during glide (degrees)
+const float MAX_IDLE_LEAN_DEG  = 15.0f;  // Max resting wing tilt at zero throttle
 
-// Frequency limits (Hz)
-const float MIN_FLAP_FREQ_HZ   = 1.4f;  // Flapping frequency at low throttle
-const float MAX_FLAP_FREQ_HZ   = 4.2f;  // Flapping frequency at full throttle
+// Steering Parameters (Max Imagination Differential Amplitude Architecture)
+const float STEER_DIFF_MAX_FRAC  = 0.45f; // Max fraction of flap amplitude shifted for steering
+const float TURN_LIFT_BOOST_FRAC = 0.15f; // +15% flap boost at full stick to prevent altitude loss
 
-// Flight Kinematics Mode:
-// 0 = Pure Symmetrical Sine Wave
-// 1 = Biomimetic Asymmetric Power Stroke (Faster downstroke, higher lift)
+// Flapping Frequency Limits (Hz)
+const float MIN_FLAP_FREQ_HZ   = 1.4f;   // Flapping frequency at low throttle
+const float MAX_FLAP_FREQ_HZ   = 4.2f;   // Flapping frequency at full throttle
+
+// Flight Kinematics Mode: 0 = Pure Sine, 1 = Biomimetic Asymmetric Power Stroke
 int flightMode = 1;
 
 // ==============================================================================
@@ -85,11 +93,17 @@ unsigned long lastMicros = 0;
 unsigned long lastLogMillis = 0;
 const unsigned long LOG_INTERVAL_MS = 1000;
 
-// Kinematic phase accumulator
+// Kinematic phase accumulators
 float flapPhase = 0.0f;
-float currentFlapOffsetUs = 0.0f;
-float targetFlapOffsetUs = 0.0f;
 float perchPhase = 0.0f;
+float ledPhase = 0.0f;
+
+// Smoothed states
+float currentLeftFlapUs = 0.0f;
+float currentRightFlapUs = 0.0f;
+float targetLeftFlapUs = 0.0f;
+float targetRightFlapUs = 0.0f;
+float smoothedSteerNorm = 0.0f;
 
 // Filtered RC Channel values
 int rcChannels[8] = {1500, 1500, 1000, 1500, 1500, 1500, 1500, 1500};
@@ -98,7 +112,7 @@ const int PPM_DEADBAND = 4;
 // Flight state flags
 bool isFailsafe = true;
 bool isPerching = false;
-int ledDebounce = 0;
+int ledMode = 1; // 0=Off, 1=Breathing/Solid, 2=Strobe
 
 // ==============================================================================
 // 4. SETUP
@@ -107,23 +121,22 @@ void setup() {
   Serial.begin(115200);
 
   pinMode(PIN_STATUS_LED, OUTPUT);
-  digitalWrite(PIN_STATUS_LED, LOW);
+  analogWrite(PIN_STATUS_LED, 128); // Initial soft glow
 
-  // Attach servos with extended pulse-width bounds
   servoLeft.attach(PIN_SERVO_LEFT, SERVO_US_MIN, SERVO_US_MAX);
   servoRight.attach(PIN_SERVO_RIGHT, SERVO_US_MIN, SERVO_US_MAX);
 
-  // Hold center neutral during startup
+  // Hold center neutral during power-up
   servoLeft.writeMicroseconds(SERVO_US_CENTER);
   servoRight.writeMicroseconds(SERVO_US_CENTER);
 
   lastMicros = micros();
 
-  Serial.println(F("=================================================="));
-  Serial.println(F("  RC BIONIC BUTTERFLY CONTROLLER v2.0 READY      "));
+  Serial.println(F("=========================================================="));
+  Serial.println(F("  RC BIONIC BUTTERFLY CONTROLLER v2.5 (DIFFERENTIAL FLAP) "));
   Serial.print  (F("  Left Pin: ")); Serial.print(PIN_SERVO_LEFT);
   Serial.print  (F(" | Right Pin: ")); Serial.println(PIN_SERVO_RIGHT);
-  Serial.println(F("=================================================="));
+  Serial.println(F("=========================================================="));
 }
 
 // ==============================================================================
@@ -131,24 +144,23 @@ void setup() {
 // ==============================================================================
 int readChannelFiltered(byte ch, int defaultVal) {
   int raw = ppm.latestValidChannelValue(ch + 1, defaultVal);
-  if (raw < 800 || raw > 2200) raw = defaultVal; // Glitch filter
+  if (raw < 800 || raw > 2200) raw = defaultVal;
   if (abs(raw - rcChannels[ch]) > PPM_DEADBAND) {
     rcChannels[ch] = (rcChannels[ch] * 3 + raw) / 4; // 4-tap EMA smoothing
   }
   return rcChannels[ch];
 }
 
-// Applies deadband and cubic expo curve for smooth center control
-float applyDeadbandAndExpo(int inputUs, float maxDeflectionDeg, float expoFactor) {
+// Cubic exponential curve for fine control near center stick
+float applyExpo(int inputUs, float maxDeflection, float expoFactor) {
   int deviation = inputUs - 1500;
-  if (abs(deviation) < 15) return 0.0f; // 15us deadband
+  if (abs(deviation) < 15) return 0.0f; // Deadband
 
-  float normalized = (float)deviation / 500.0f; // -1.0 to +1.0
+  float normalized = (float)deviation / 500.0f;
   normalized = constrain(normalized, -1.0f, 1.0f);
 
-  // Expo formula: output = (1 - k)*x + k*x^3
   float shaped = (1.0f - expoFactor) * normalized + expoFactor * (normalized * normalized * normalized);
-  return shaped * maxDeflectionDeg;
+  return shaped * maxDeflection;
 }
 
 // ==============================================================================
@@ -157,46 +169,49 @@ float applyDeadbandAndExpo(int inputUs, float maxDeflectionDeg, float expoFactor
 void loop() {
   unsigned long nowMicros = micros();
   float dt = (nowMicros - lastMicros) * 1e-6f;
-  if (dt <= 0.0f || dt > 0.1f) dt = 0.004f; // Clamp anomalous loop delays
+  if (dt <= 0.0f || dt > 0.1f) dt = 0.004f;
   lastMicros = nowMicros;
 
-  // Check receiver connection status (Channel 3 = Throttle)
+  // Update LED lighting effects
+  updateLedEffects(dt);
+
+  // Check receiver connection status (CH3 = Throttle)
   unsigned long ch3Raw = ppm.latestValidChannelValue(3, 0);
   bool signalOk = (ch3Raw >= 900 && ch3Raw <= 2100);
 
   if (!signalOk) {
-    // Receiver signal lost -> Enter failsafe
     handleFailsafe(dt);
-    digitalWrite(PIN_STATUS_LED, LOW);
   } else {
-    // Read smoothed RC Channels
-    int chSteering = readChannelFiltered(0, 1500); // CH1: Aileron/Rudder
-    int chElevator = readChannelFiltered(1, 1500); // CH2: Elevator (pitch trim)
+    // Read RC Channels
+    int chSteering = readChannelFiltered(0, 1500); // CH1: Steering
+    int chElevator = readChannelFiltered(1, 1500); // CH2: Pitch
     int chThrottle = readChannelFiltered(2, 1000); // CH3: Throttle
-    int chAuxTrim  = readChannelFiltered(4, 1500); // CH5: Steering trim pot
+    int chAuxTrim  = readChannelFiltered(4, 1500); // CH5: Steering fine trim pot
     int chAuxPitch = readChannelFiltered(5, 1500); // CH6: Pitch bias pot
     int chSwitch7  = readChannelFiltered(6, 1000); // CH7: Perch mode switch
-    int chAux8     = readChannelFiltered(7, 1000); // CH8: LED / Flight mode switch
+    int chAux8     = readChannelFiltered(7, 1000); // CH8: LED mode & Flight mode
 
-    // LED status & Mode switch
-    if (chAux8 > 1600) {
-      if (ledDebounce < 5) ledDebounce++;
-    } else if (chAux8 < 1400) {
-      if (ledDebounce > 0) ledDebounce--;
-    }
-    digitalWrite(PIN_STATUS_LED, (ledDebounce >= 5) ? HIGH : LOW);
-    flightMode = (chAux8 > 1750) ? 0 : 1; // High = Pure Sine, Low = Biomimetic
+    flightMode = (chAux8 > 1750) ? 0 : 1; // Pure Sine vs Biomimetic
+    ledMode    = (chAux8 > 1500) ? 2 : 1; // Strobe vs Breathing
 
-    // Calculate user control offsets
-    float steerStickDeg = applyDeadbandAndExpo(chSteering, MAX_STEER_DEG, 0.35f);
-    float steerTrimDeg  = ((float)(chAuxTrim - 1500) / 500.0f) * MAX_STEER_DEG;
-    float finalSteerDeg = steerStickDeg + steerTrimDeg;
+    // Steering input: -1.0 (full left) to +1.0 (full right)
+    float steerInput = applyExpo(chSteering, 1.0f, 0.35f);
+    float steerTrim  = (float)(chAuxTrim - 1500) / 500.0f * 0.3f;
+    float targetSteerNorm = constrain(steerInput + steerTrim, -1.0f, 1.0f);
 
-    float elevStickDeg  = applyDeadbandAndExpo(chElevator, MAX_PITCH_DEG, 0.30f);
-    float elevTrimDeg   = ((float)(chAuxPitch - 1500) / 500.0f) * MAX_PITCH_DEG;
-    float finalPitchDeg = elevStickDeg + elevTrimDeg;
+    // Smooth steering transitions (eliminates sudden servo jerks)
+    smoothedSteerNorm += (targetSteerNorm - smoothedSteerNorm) * constrain(dt * 20.0f, 0.1f, 1.0f);
 
-    // State machine: Flapping vs Perching vs Gliding
+    // Symmetric Pitch bias (climb vs dive)
+    float elevDeg  = applyExpo(chElevator, MAX_PITCH_DEG, 0.30f);
+    float pitchDeg = ((float)(chAuxPitch - 1500) / 500.0f) * MAX_PITCH_DEG;
+    float pitchOffsetUs = (elevDeg + pitchDeg) * US_PER_DEGREE;
+
+    // Throttle normalization (0.0 to 1.0)
+    float thrNorm = (float)(chThrottle - 1050) / 950.0f;
+    thrNorm = constrain(thrNorm, 0.0f, 1.0f);
+
+    // Flight State Selection
     if (chThrottle > 1100) {
       isPerching = false;
     } else if (chSwitch7 > 1600 && chThrottle < 1100) {
@@ -206,52 +221,46 @@ void loop() {
 
     if (isPerching) {
       updatePerchState(chAuxPitch, dt);
-    } else if (chThrottle < 1050) {
-      updateGlideState(dt);
+    } else if (thrNorm < 0.05f) {
+      // ZERO-THROTTLE: IDLE LEAN & GLIDE
+      updateIdleLean(smoothedSteerNorm, dt);
     } else {
-      updateFlappingFlight(chThrottle, dt);
+      // ACTIVE FLIGHT: DIFFERENTIAL-AMPLITUDE FLAPPING
+      updateDifferentialFlapping(thrNorm, smoothedSteerNorm, dt);
     }
 
-    // Convert control offsets to microsecond pulse differences
-    float steerOffsetUs = finalSteerDeg * US_PER_DEGREE;
-    float pitchOffsetUs = finalPitchDeg * US_PER_DEGREE;
-
-    // Apply Headroom & Anti-Clipping Soft Compression
-    // Prevents servos from stalling against limits when flap + offsets combine
-    float totalOffsetsUs = abs(steerOffsetUs) + abs(pitchOffsetUs);
-    float availableHeadroom = (SERVO_US_MAX - SERVO_US_CENTER) - totalOffsetsUs - 50.0f;
-    if (availableHeadroom < (MIN_FLAP_AMP_DEG * US_PER_DEGREE)) {
-      availableHeadroom = MIN_FLAP_AMP_DEG * US_PER_DEGREE;
+    // Dynamic Headroom & Anti-Clipping Protection
+    float availHeadroom = (SERVO_US_MAX - SERVO_US_CENTER) - abs(pitchOffsetUs) - 40.0f;
+    if (availHeadroom < (MIN_FLAP_AMP_DEG * US_PER_DEGREE)) {
+      availHeadroom = MIN_FLAP_AMP_DEG * US_PER_DEGREE;
     }
 
-    float safeFlapUs = constrain(currentFlapOffsetUs, -availableHeadroom, availableHeadroom);
+    float safeLeftFlapUs  = constrain(currentLeftFlapUs,  -availHeadroom, availHeadroom);
+    float safeRightFlapUs = constrain(currentRightFlapUs, -availHeadroom, availHeadroom);
 
-    // Dynamic servo pulse calculation:
-    // Left and Right servos are mirror-mounted:
-    // Flapping: Left (+), Right (-) -> Wings move together up/down
-    // Steering: Left (+), Right (+) -> Differential roll/bank
+    // Output Servo Pulses:
+    // Flapping: Left (+), Right (-) -> Wings flap together up and down
     // Pitch:    Left (+), Right (-) -> Both wings bias up/down together
-    float pulseLeft  = SERVO_US_CENTER + safeFlapUs + steerOffsetUs + pitchOffsetUs;
-    float pulseRight = SERVO_US_CENTER - safeFlapUs + steerOffsetUs - pitchOffsetUs;
+    float pulseLeft  = SERVO_US_CENTER + safeLeftFlapUs  + pitchOffsetUs;
+    float pulseRight = SERVO_US_CENTER - safeRightFlapUs - pitchOffsetUs;
 
-    // Hard mechanical constraint
     pulseLeft  = constrain(pulseLeft,  SERVO_US_MIN, SERVO_US_MAX);
     pulseRight = constrain(pulseRight, SERVO_US_MIN, SERVO_US_MAX);
 
-    // Direct microsecond output
     servoLeft.writeMicroseconds((int)pulseLeft);
     servoRight.writeMicroseconds((int)pulseRight);
 
     isFailsafe = false;
   }
 
-  // Diagnostic telemetry
+  // Diagnostic Telemetry
   if (millis() - lastLogMillis > LOG_INTERVAL_MS) {
     lastLogMillis = millis();
     if (signalOk) {
       Serial.print(F("[OK] THR: ")); Serial.print(rcChannels[2]);
-      Serial.print(F(" | FLAP_US: ")); Serial.print((int)currentFlapOffsetUs);
-      Serial.print(F(" | MODE: ")); Serial.println((flightMode == 1) ? F("BIOMIMETIC") : F("SINE"));
+      Serial.print(F(" | STEER: ")); Serial.print(smoothedSteerNorm, 2);
+      Serial.print(F(" | FLAP_L: ")); Serial.print((int)currentLeftFlapUs);
+      Serial.print(F(" | FLAP_R: ")); Serial.println((int)currentRightFlapUs);
     } else {
       Serial.println(F("[!] FAILSAFE: NO VALID PPM SIGNAL DETECTED"));
     }
@@ -259,56 +268,70 @@ void loop() {
 }
 
 // ==============================================================================
-// 7. KINEMATICS ENGINE
+// 7. DIFFERENTIAL AMPLITUDE KINEMATICS ENGINE
 // ==============================================================================
-
-// Normal active flapping flight
-void updateFlappingFlight(int throttleUs, float dt) {
-  // Normalize throttle from 1050 to 2000 -> 0.0 to 1.0
-  float thrNorm = (float)(throttleUs - 1050) / 950.0f;
-  thrNorm = constrain(thrNorm, 0.0f, 1.0f);
-
-  // Dynamic Frequency Scaling: 1.4 Hz to 4.2 Hz
+void updateDifferentialFlapping(float thrNorm, float steerNorm, float dt) {
+  // 1. Dynamic Frequency Modulation (1.4 Hz to 4.2 Hz)
   float currentFreq = MIN_FLAP_FREQ_HZ + thrNorm * (MAX_FLAP_FREQ_HZ - MIN_FLAP_FREQ_HZ);
 
-  // Dynamic Amplitude Scaling: 20 degrees to 65 degrees
-  float targetAmpDeg = MIN_FLAP_AMP_DEG + thrNorm * (MAX_FLAP_AMP_DEG - MIN_FLAP_AMP_DEG);
-  float targetAmpUs  = targetAmpDeg * US_PER_DEGREE;
+  // 2. Base Amplitude Modulation (20° to 65°)
+  float baseAmpDeg = MIN_FLAP_AMP_DEG + thrNorm * (MAX_FLAP_AMP_DEG - MIN_FLAP_AMP_DEG);
 
-  // Advance phase smoothly with exact delta time
+  // 3. Turn Lift Boost: hard steering automatically adds up to +15% extra flap
+  //    amplitude to prevent the butterfly from losing altitude while banked!
+  float turnLiftBoost = 1.0f + (abs(steerNorm) * TURN_LIFT_BOOST_FRAC);
+  baseAmpDeg *= turnLiftBoost;
+
+  // 4. Differential Amplitude Allocation:
+  //    Steering right (+steerNorm): Left wing flaps LARGER, Right wing flaps SMALLER.
+  //    Steering left  (-steerNorm): Right wing flaps LARGER, Left wing flaps SMALLER.
+  float maxDeltaDeg = baseAmpDeg * STEER_DIFF_MAX_FRAC;
+  float wingDeltaDeg = steerNorm * maxDeltaDeg;
+
+  float leftAmpDeg  = baseAmpDeg + wingDeltaDeg;
+  float rightAmpDeg = baseAmpDeg - wingDeltaDeg;
+
+  leftAmpDeg  = constrain(leftAmpDeg,  10.0f, MAX_FLAP_AMP_DEG + 10.0f);
+  rightAmpDeg = constrain(rightAmpDeg, 10.0f, MAX_FLAP_AMP_DEG + 10.0f);
+
+  float leftAmpUs  = leftAmpDeg  * US_PER_DEGREE;
+  float rightAmpUs = rightAmpDeg * US_PER_DEGREE;
+
+  // 5. Advance Phase Smoothly with exact Delta Time
   flapPhase += 2.0f * PI * currentFreq * dt;
-  if (flapPhase >= 2.0f * PI) {
-    flapPhase -= 2.0f * PI;
-  }
+  if (flapPhase >= 2.0f * PI) flapPhase -= 2.0f * PI;
 
-  // Waveform generation
-  float rawWave = 0.0f;
+  // 6. Waveform Synthesis: Pure Sine vs Biomimetic Asymmetric Power Stroke
+  float wave = 0.0f;
   if (flightMode == 0) {
-    // Pure Sine Wave
-    rawWave = sin(flapPhase);
+    wave = sin(flapPhase);
   } else {
-    // Biomimetic Asymmetric Wave (Faster, punchier downstroke; smooth recovery)
-    // Cycloidal warping produces high leading-edge vortex lift
-    rawWave = sin(flapPhase + 0.35f * sin(flapPhase));
+    // Cycloidal warping produces a punchy, vortex-generating power downstroke
+    wave = sin(flapPhase + 0.35f * sin(flapPhase));
   }
 
-  targetFlapOffsetUs = rawWave * targetAmpUs;
+  targetLeftFlapUs  = wave * leftAmpUs;
+  targetRightFlapUs = wave * rightAmpUs;
 
-  // Smooth filter to eliminate sharp acceleration spikes
-  currentFlapOffsetUs += (targetFlapOffsetUs - currentFlapOffsetUs) * constrain(dt * 30.0f, 0.1f, 1.0f);
+  // Smooth filtering to prevent harsh servo acceleration shocks
+  currentLeftFlapUs  += (targetLeftFlapUs  - currentLeftFlapUs)  * constrain(dt * 30.0f, 0.1f, 1.0f);
+  currentRightFlapUs += (targetRightFlapUs - currentRightFlapUs) * constrain(dt * 30.0f, 0.1f, 1.0f);
 }
 
-// Gliding state: wings hold a slight upward "V" dihedral for stability
-void updateGlideState(float dt) {
-  float glideUs = DIHEDRAL_GLIDE_DEG * US_PER_DEGREE; // Hold stable positive dihedral
-  if (abs(currentFlapOffsetUs - glideUs) > 2.0f) {
-    currentFlapOffsetUs += (currentFlapOffsetUs < glideUs) ? (200.0f * dt) : (-200.0f * dt);
-  } else {
-    currentFlapOffsetUs = glideUs;
-  }
+// Zero-throttle Idle Lean: stick tilts wings into a resting pose without flapping
+void updateIdleLean(float steerNorm, float dt) {
+  float glideUs = DIHEDRAL_GLIDE_DEG * US_PER_DEGREE;
+  float leanUs  = (steerNorm * MAX_IDLE_LEAN_DEG) * US_PER_DEGREE;
+
+  // During idle lean, both wings tilt in unison
+  float targetL = glideUs - leanUs;
+  float targetR = glideUs + leanUs;
+
+  currentLeftFlapUs  += (targetL - currentLeftFlapUs)  * constrain(dt * 15.0f, 0.05f, 1.0f);
+  currentRightFlapUs += (targetR - currentRightFlapUs) * constrain(dt * 15.0f, 0.05f, 1.0f);
 }
 
-// Perch mode: gentle organic wing flutter while resting on a branch or hand
+// Perch Mode: gentle fluttering while resting on a branch or hand
 void updatePerchState(int rawCh6, float dt) {
   float perchMaxDeg = map(rawCh6, 1000, 2000, 30, 55);
   perchPhase += 1.8f * dt;
@@ -317,21 +340,36 @@ void updatePerchState(int rawCh6, float dt) {
   float perchOffsetDeg = perchMaxDeg + (sin(perchPhase) * 12.0f) - 12.0f;
   float goalUs = perchOffsetDeg * US_PER_DEGREE;
 
-  currentFlapOffsetUs += (goalUs - currentFlapOffsetUs) * constrain(dt * 8.0f, 0.05f, 1.0f);
+  currentLeftFlapUs  += (goalUs - currentLeftFlapUs)  * constrain(dt * 8.0f, 0.05f, 1.0f);
+  currentRightFlapUs += (goalUs - currentRightFlapUs) * constrain(dt * 8.0f, 0.05f, 1.0f);
 }
 
-// Failsafe state: smoothly moves wings into positive dihedral glide to prevent crash
+// Failsafe Mode: holds positive dihedral glide posture (+18°)
 void handleFailsafe(float dt) {
   float glideUs = DIHEDRAL_GLIDE_DEG * US_PER_DEGREE;
-  if (abs(currentFlapOffsetUs - glideUs) > 5.0f) {
-    currentFlapOffsetUs += (currentFlapOffsetUs < glideUs) ? (150.0f * dt) : (-150.0f * dt);
-  } else {
-    currentFlapOffsetUs = glideUs;
-  }
+  currentLeftFlapUs  += (glideUs - currentLeftFlapUs)  * constrain(dt * 8.0f, 0.05f, 1.0f);
+  currentRightFlapUs += (glideUs - currentRightFlapUs) * constrain(dt * 8.0f, 0.05f, 1.0f);
 
-  int outL = SERVO_US_CENTER + (int)currentFlapOffsetUs;
-  int outR = SERVO_US_CENTER - (int)currentFlapOffsetUs;
+  int outL = SERVO_US_CENTER + (int)currentLeftFlapUs;
+  int outR = SERVO_US_CENTER - (int)currentRightFlapUs;
   servoLeft.writeMicroseconds(constrain(outL, SERVO_US_MIN, SERVO_US_MAX));
   servoRight.writeMicroseconds(constrain(outR, SERVO_US_MIN, SERVO_US_MAX));
 }
 
+// LED Lighting Effects (Flexible LED Filaments or Status LED)
+void updateLedEffects(float dt) {
+  if (ledMode == 0) {
+    analogWrite(PIN_STATUS_LED, 0);
+  } else if (ledMode == 1) {
+    // Breathing Glow Effect
+    ledPhase += 2.5f * dt;
+    if (ledPhase >= 2.0f * PI) ledPhase -= 2.0f * PI;
+    int brightness = (int)((sin(ledPhase) + 1.0f) * 110.0f + 35.0f);
+    analogWrite(PIN_STATUS_LED, brightness);
+  } else {
+    // Fast Strobe Effect
+    ledPhase += 15.0f * dt;
+    if (ledPhase >= 2.0f * PI) ledPhase -= 2.0f * PI;
+    analogWrite(PIN_STATUS_LED, (sin(ledPhase) > 0.0f) ? 255 : 0);
+  }
+}

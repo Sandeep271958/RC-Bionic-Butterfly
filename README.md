@@ -1,18 +1,20 @@
 # RC Bionic Butterfly (Biomimetic Flapping-Wing Ornithopter)
 
-An ultra-responsive, lightweight radio-controlled **Bionic Butterfly** ornithopter project featuring dual-servo independent wing kinematics, biomimetic power stroke profiles, and aerodynamic dihedral gliding.
+An ultra-responsive, lightweight radio-controlled **Bionic Butterfly** ornithopter project featuring dual-servo independent wing kinematics, differential-amplitude steering, turn lift boost, smartphone web control, and glowing night-flight LED filaments.
+
+Inspired by mechanical research from **S-DiY / TruongVanSu91**, **CTorque Tech**, and **Max Imagination's ESP-FLUTTER** ([YouTube: Make an ESP32 RC Bionic Butterfly That Flies](https://youtu.be/5Le4I-1Pf9I)).
 
 ---
 
-## 🦋 Project Overview
-
-Unlike traditional RC planes or drones, this bionic butterfly generates lift and forward thrust using two independently driven servos flapping flexible carbon-fiber membrane wings.
+## 🦋 Project Highlights
 
 * **Wingspan:** ~380 mm – 400 mm (~15.5 inches)
 * **All-Up-Weight (AUW):** ~55 g – 65 g
-* **Flight Controller:** Arduino Pro Micro (ATmega32U4) / Upgradeable to ESP32-C3 & F4 AIO
 * **Actuation:** Dual 9g High-Voltage (HV) or Metal-Gear digital servos
 * **Power:** 2S 7.4V 250mAh – 350mAh LiPo
+* **Dual Flight Controller Support:**
+  * **Track 1:** Arduino Pro Micro (ATmega32U4) for traditional PPM/SBUS RC transmitters.
+  * **Track 2 (Recommended):** Seeed Studio XIAO ESP32-C3 for **zero-receiver-weight smartphone web app control**, 333Hz PWM, and ESP-NOW/ELRS telemetry.
 
 ---
 
@@ -20,8 +22,10 @@ Unlike traditional RC planes or drones, this bionic butterfly generates lift and
 
 ```
 ├── README.md                          # Project overview and quick start
-├── DIY_BUILD_GUIDE.md                 # Step-by-step scratch build manual & MCU upgrade guide
-├── Bionic_Butterfly_Enhanced.ino      # Upgraded v2.0 high-responsiveness flight firmware
+├── DIY_BUILD_GUIDE.md                 # Step-by-step scratch build manual & video analysis
+├── Bionic_Butterfly_Enhanced.ino      # Upgraded v2.5 Arduino Pro Micro flight firmware
+├── ESP32_C3_Firmware/                 # High-performance ESP32-C3 firmware track
+│   └── ESP32_Bionic_Butterfly.ino     # Smartphone Web App controller & 333Hz PWM driver
 ├── S_DIY bionic_butterfly code.ino    # Baseline v1.0 source firmware (for reference)
 ├── circuit.jpeg                       # Wiring schematic reference
 ├── wing design.jpeg                   # 1:1 printable wing spar & membrane template (2:3 aspect ratio)
@@ -34,14 +38,20 @@ Unlike traditional RC planes or drones, this bionic butterfly generates lift and
 
 ---
 
-## ⚡ Key Improvements in Firmware v2.0 (`Bionic_Butterfly_Enhanced.ino`)
+## ⚡ Key Innovations & Aerodynamic Features
 
-1. **Jitter-Free Deterministic Timebase:** Operates on microsecond delta-time (`dt`), eliminating frequency flutter caused by loop delays or serial printing.
-2. **Microsecond Precision Servo Drive:** Uses `Servo.writeMicroseconds(us)` instead of 1-degree steps, removing mechanical gear chatter and delivering smooth flapping arcs.
-3. **Dynamic Throttle Authority:** Simultaneously scales flapping frequency (1.4 Hz to 4.2 Hz) and stroke amplitude (20° flutter to 65° power stroke).
-4. **Biomimetic Asymmetric Power Stroke:** Uses a cycloidal waveform for a faster downstroke (vortex lift) and a cushioned recovery upstroke.
-5. **Anti-Clipping Headroom Protection:** Prevents servos from stalling against physical travel limits when steering or pitch offsets are applied.
-6. **Aerodynamic Dihedral Failsafe:** Transitions wings into a stable "V" dihedral glide if signal is lost, preventing flat-spin crashes.
+1. **Differential-Amplitude Steering (Max Imagination Architecture):**
+   Instead of merely shifting the mean servo angle, steering dynamically varies the stroke amplitude between left and right wings (e.g. left flaps 75°, right flaps 45°). This delivers crisp, agile yaw/roll turning without wing stall!
+2. **Automatic Turn Lift Boost:**
+   During banked turns, aerodynamic lift is tilted sideways. The controller automatically injects a **+15% flap amplitude boost** during hard steering to prevent altitude loss.
+3. **Zero-Receiver Smartphone Web App (ESP32-C3):**
+   Connect your phone to **`Butterfly_RC`** and open `http://192.168.4.1` for a full on-screen touch joystick, throttle slider, and live battery voltage telemetry. Saves 5.3g of dead weight!
+4. **Zero-Throttle Idle Lean:**
+   Below 5% throttle, stick inputs do not flap the wings; instead, they pose the wings in a smooth, organic resting tilt (up to ±15°).
+5. **Night-Flight Glowing Flexible LED Filaments:**
+   Drives ultra-lightweight 3V flexible LED filaments along the wing leading edge with Solid, Breathing, and Strobe modes.
+6. **Aerodynamic Dihedral Failsafe:**
+   Transitions wings into a stable +18° upward "V" dihedral glide if signal is lost, preventing flat-spin crashes.
 
 ---
 
@@ -60,37 +70,27 @@ Unlike traditional RC planes or drones, this bionic butterfly generates lift and
   * **1.0 mm OD:** Forewing radiating ribs (~120–160 mm each).
   * **0.8 mm OD:** Hindwing frame & diagonals (~110–150 mm each).
 * Lash rod junctions to `ARMV5` sockets with Kevlar thread and bond with Thin CA glue.
+* Optional: Bond a 130mm 3V flexible LED filament along each leading edge for night flight.
 * Skin with **0.5 oz Ripstop Nylon** or **15 µm Mylar film** using 3M 77 spray adhesive or 3mm double-sided tape.
 
 ### 3. Electrical Wiring & Power
-* **Receiver PPM Out** $\rightarrow$ Arduino Pin 2
-* **Left Servo Signal** $\rightarrow$ Arduino Pin 4
-* **Right Servo Signal** $\rightarrow$ Arduino Pin 5
 * **Power Rail:** Solder a **470µF – 1000µF Low-ESR capacitor** directly across the servo power rail (+ and -) to protect the flight controller from inductive back-EMF spikes.
-* *Note:* If using standard 5V-6V servos (MG90S, ES08MD), use a **5V/6V 3A Micro BEC** from the 2S LiPo.
+* **Arduino Track:** Left Servo $\rightarrow$ Pin 4, Right Servo $\rightarrow$ Pin 5, Receiver PPM $\rightarrow$ Pin 2.
+* **ESP32-C3 Track:** Left Servo $\rightarrow$ Pin D0, Right Servo $\rightarrow$ Pin D1, Battery Divider $\rightarrow$ Pin D2, LED $\rightarrow$ Pin D3.
 
 ### 4. Flashing Firmware
-1. Open [`Bionic_Butterfly_Enhanced.ino`](./Bionic_Butterfly_Enhanced.ino) in Arduino IDE.
-2. Install `PPMReader` library.
-3. Select board **Arduino Leonardo / Micro** and upload.
-
----
-
-## 🔬 Microcontroller Upgrade Research
-
-See the comprehensive research in [`DIY_BUILD_GUIDE.md`](./DIY_BUILD_GUIDE.md#2-microcontroller-upgrade-research--flight-response-analysis) on upgrading from the stock Arduino Pro Micro:
-* **Seeed Studio XIAO ESP32-C3:** Eliminates the external receiver via **ESP-NOW**, drops latency to 2–4 ms, and cuts **5.3 grams** of total weight.
-* **FPV Micro AIO (STM32F411 with Gyro & ELRS):** Adds active 6-axis gyroscopic attitude damping to eliminate roll/pitch wobbling in wind.
+* **For Arduino Pro Micro:** Open [`Bionic_Butterfly_Enhanced.ino`](./Bionic_Butterfly_Enhanced.ino) and upload as *Arduino Leonardo / Micro*.
+* **For Seeed Studio XIAO ESP32-C3:** Open [`ESP32_C3_Firmware/ESP32_Bionic_Butterfly.ino`](./ESP32_C3_Firmware/ESP32_Bionic_Butterfly.ino) and upload as *Seeed Studio XIAO ESP32C3*.
 
 ---
 
 ## 📋 Complete Documentation
 
-For the full step-by-step build manual, wiring schematics, radio calibration, and flight trimming procedures, consult:
+For the full step-by-step build manual, wiring schematics, video analysis, and flight trimming procedures, consult:
 👉 **[Complete DIY Build Guide (`DIY_BUILD_GUIDE.md`)](./DIY_BUILD_GUIDE.md)**
 
 ---
 
 ## 📜 Credits & Acknowledgments
-* Based on open-source mechanical concepts and research from **S-DiY / TruongVanSu91** and **CTorque Tech**.
-* Enhanced firmware and engineering build manual developed for biomimetic robotics enthusiasts.
+* Mechanical 3D models and ornithopter research inspired by **CTorque Tech** and **S-DiY / TruongVanSu91**.
+* Differential-amplitude kinematics, web-app control, and night-flight LED filament concepts based on **Max Imagination's ESP-FLUTTER** ([YouTube](https://youtu.be/5Le4I-1Pf9I)).
