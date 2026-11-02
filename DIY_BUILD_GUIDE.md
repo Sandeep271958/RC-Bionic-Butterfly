@@ -1,35 +1,38 @@
-# RC Bionic Butterfly: Master Scratch-Build Manual (ESP-FLUTTER Architecture)
+# RC Bionic Butterfly: Master Scratch-Build Manual
 
-An end-to-end, highly detailed engineering and build manual for the **ESP32-C3 Bionic RC Butterfly (ESP-FLUTTER)** inspired by **Max Imagination** and **CTorque Robotics**.
+An end-to-end, engineering-grade build guide for the **ESP32 Bionic RC Butterfly (ESP-FLUTTER Architecture)** featuring **Dual Control: Smartphone Web Cockpit & Traditional PPM RC Controller**.
 
 ---
 
 ## Table of Contents
 1. [Project Overview & Core Specifications](#1-project-overview--core-specifications)
 2. [Flight Dynamics & Aerodynamic Breakthroughs](#2-flight-dynamics--aerodynamic-breakthroughs)
-3. [Complete Bill of Materials (Exact Procurement List)](#3-complete-bill-of-materials-exact-procurement-list)
-4. [Phase 1: 3D Printing & Verified Slicer Parameters](#4-phase-1-3d-printing--verified-slicer-parameters)
-5. [Phase 2: Wing Skeleton & Carbon Fiber Cut List](#5-phase-2-wing-skeleton--carbon-fiber-cut-list)
-6. [Phase 3: Wing Skinning & Night-Flight Flexible LED Filaments](#6-phase-3-wing-skinning--night-flight-flexible-led-filaments)
-7. [Phase 4: Servo Actuation & Spline Indexing](#7-phase-4-servo-actuation--spline-indexing)
-8. [Phase 5: Electrical Wiring & Power Conditioning](#8-phase-5-electrical-wiring--power-conditioning)
-9. [Phase 6: Firmware Setup & Flashing](#9-phase-6-firmware-setup--flashing)
-10. [Phase 7: Piloting via Smartphone Web App or RC Transmitter](#10-phase-7-piloting-via-smartphone-web-app-or-rc-transmitter)
-11. [Phase 8: Pre-Flight Trimming, CG Balancing & Maiden Flight](#11-phase-8-pre-flight-trimming-cg-balancing--maiden-flight)
-12. [Troubleshooting & Diagnostics](#12-troubleshooting--diagnostics)
+3. [Repository Architecture & File Map](#3-repository-architecture--file-map)
+4. [Complete Bill of Materials (Exact Procurement List)](#4-complete-bill-of-materials-exact-procurement-list)
+5. [Phase 1: 3D Printing & Slicer Configuration](#5-phase-1-3d-printing--slicer-configuration)
+6. [Phase 2: Wing Skeleton & Exact Carbon Fiber Cut List](#6-phase-2-wing-skeleton--exact-carbon-fiber-cut-list)
+7. [Phase 3: Wing Skinning & Night-Flight Flexible LED Filaments](#7-phase-3-wing-skinning--night-flight-flexible-led-filaments)
+8. [Phase 4: Servo Actuation & Spline Indexing](#8-phase-4-servo-actuation--spline-indexing)
+9. [Phase 5: Electrical Wiring & Power Conditioning](#9-phase-5-electrical-wiring--power-conditioning)
+10. [Phase 6: Firmware Setup & Flashing](#10-phase-6-firmware-setup--flashing)
+11. [Phase 7: Dual Piloting: Smartphone Web App & PPM RC Controller](#11-phase-7-dual-piloting-smartphone-web-app--ppm-rc-controller)
+12. [Phase 8: CG Balancing, Flight Trimming & Maiden Flight](#12-phase-8-cg-balancing-flight-trimming--maiden-flight)
+13. [Troubleshooting & Diagnostics](#13-troubleshooting--diagnostics)
 
 ---
 
 ## 1. Project Overview & Core Specifications
 
-* **Wingspan:** 390 mm – 410 mm (15.5 inches)
+* **Wingspan:** 390 mm – 410 mm (~15.5 inches)
 * **Flying Weight (AUW):** ~65 g – 72 g
 * **Flight Controller:** **Seeed Studio XIAO ESP32-C3** (1.2g, 32-bit RISC-V @ 160MHz)
-* **Primary Control Link:** Built-in Wi-Fi Access Point (`Butterfly_RC`) hosting an embedded HTML5 touch web app (`http://192.168.4.1`)
-* **Secondary Radio Links:** Direct **ESP-NOW** (sub-3ms) or **ExpressLRS (ELRS 2.4GHz)** via CRSF UART
+* **Dual Control Links:**
+  * **Interface 1:** Embedded HTML5 Touch Web Cockpit hosted on-board via Wi-Fi Soft-AP (`http://192.168.4.1`)
+  * **Interface 2:** Traditional RC Receiver via hardware interrupt **PPM decoding on Pin D9** (with auto-arbitration priority)
 * **Servos:** Dual 2S High-Voltage Coreless Metal-Gear Digital Servos (**Servomy SDS1601**, **C-Torque 9g HV**, or **PTK 7465MG**)
-* **Battery:** 2S 7.4V–8.4V 220mAh–350mAh LiPo (30C–45C burst)
-* **Flight Time:** ~1.5 to 2.5 minutes continuous flight
+* **PWM Servo Frame Rate:** **333 Hz** (sub-microsecond precision)
+* **Power:** 2S 7.4V–8.4V 220mAh–350mAh LiPo (45C burst)
+* **Lighting:** Flexible 3V LED filaments for night flight (Breathing / Strobe modes)
 
 ---
 
@@ -45,32 +48,61 @@ An end-to-end, highly detailed engineering and build manual for the **ESP32-C3 B
                            [ Central Chassis ]
 ```
 
-### Why the ESP-FLUTTER Architecture Outperforms Previous Designs
+### Why This Architecture Outperforms Previous Designs
 1. **Differential-Amplitude Steering:**
-   * In traditional DIY butterflies, steering was attempted by tilting the servo neutral angle. This often resulted in the inside wing stalling and the butterfly tumbling or dropping altitude.
-   * **The ESP-FLUTTER Breakthrough:** The flight computer redistributes the stroke amplitude between wings while keeping both strokes dynamically active:
+   * Traditional builds tilted the servo neutral angle, which frequently stalled the inside wing and caused the butterfly to drop altitude.
+   * **Differential-Amplitude Breakthrough:** Flap amplitude is dynamically redistributed between the wings:
      $$\text{Wing Delta} = \text{SteerNorm} \times \text{BaseAmplitude} \times 0.45$$
      $$\text{Left Amplitude} = \text{BaseAmplitude} + \text{Wing Delta}$$
      $$\text{Right Amplitude} = \text{BaseAmplitude} - \text{Wing Delta}$$
-     When steering right, the left wing flaps through a larger arc (generating higher lift and thrust), while the right wing flaps through a shallower arc. This generates natural, stable banking turns.
-2. **Turn Lift Boost:**
-   * Banking tilts aerodynamic lift sideways, reducing vertical lift. ESP-FLUTTER automatically adds an amplitude multiplier during steering:
+     When turning right, the left wing flaps through a deeper arc (producing higher thrust/lift) while the right wing flaps through a shallower arc. This generates smooth, natural banking turns.
+2. **Automatic Turn Lift Boost:**
+   * Banking tilts aerodynamic lift sideways, reducing vertical lift. The flight controller automatically injects an extra flap amplitude boost during hard steering:
      $$\text{TurnLiftBoost} = 1.0 + (|\text{SteerNorm}| \times 0.15)$$
-     At full stick deflection, flap amplitude automatically surges by **+15%**, maintaining altitude throughout tight bank turns.
+     At full stick deflection, flap amplitude surges by **+15%**, maintaining altitude throughout tight bank turns.
 3. **Zero-Throttle Idle Lean:**
    * Below 5% throttle, stick inputs do not flap the wings; instead, they gently pose the wings in an organic resting lean (up to ±15°).
 4. **333Hz Digital Servo Refresh:**
-   * Traditional 50Hz Arduino servo libraries introduce up to 20ms of mechanical lag. Driving SDS1601 digital servos at **333Hz** delivers instantaneous response with high holding torque.
+   * Traditional 50Hz Arduino servo libraries introduce up to 20ms of mechanical lag. Driving SDS1601 digital servos at **333Hz** delivers instantaneous aerodynamic authority.
 
 ---
 
-## 3. Complete Bill of Materials (Exact Procurement List)
+## 3. Repository Architecture & File Map
 
-### A. Core Electronics & Actuation
+```
+├── README.md                                # Master overview, pinouts, and quickstart
+├── DIY_BUILD_GUIDE.md                       # Complete scratch-build engineering manual
+├── firmware/
+│   └── ESP32_Bionic_Butterfly/              # Unified Arduino IDE flight firmware
+│       ├── ESP32_Bionic_Butterfly.ino       # Main flight controller & dual-control engine
+│       ├── config.h                         # Pin definitions, servo calibration & tuning
+│       ├── ppm_receiver.h                   # High-speed interrupt PPM decoder
+│       └── web_ui.h                         # Embedded responsive touch cockpit
+├── hardware/                                # 3D models (pre-mirrored & flight-ready)
+│   ├── FC_Mount_V5.stl                      # Central chassis (mounts servos & electronics)
+│   ├── ARMV5_Right.stl                      # Right wing drive arm
+│   └── ARMV5_Left_Mirrored.stl              # Pre-mirrored Left wing drive arm
+└── documentation/                           # Official schematics, blueprints & cut charts
+    ├── Left_Wing_Blueprint.pdf              # 1:1 Vector printable left wing template
+    ├── Right_Wing_Blueprint.pdf             # 1:1 Vector printable right wing template
+    ├── Rod_Length_and_Quantity_Chart.jpg    # Exact carbon fiber cut list
+    ├── Wing_Carbon_Rod_Thickness_Schematic.png # Spar layout diagram
+    ├── Wiring_Diagram_ESP32.jpg             # Official modular wiring schematic
+    ├── Flight_Controller_PCB_Schematic.jpg  # Circuit schematic
+    ├── Print_Settings.jpg                   # Bambu/OrcaSlicer verified print settings
+    └── SDS1601_Servo_Datasheet.jpg          # Servo technical datasheet
+```
+
+---
+
+## 4. Complete Bill of Materials (Exact Procurement List)
+
+### A. Flight Electronics & Actuation
 | Item | Exact Model / Spec | Qty | Purpose & Notes |
 | :--- | :--- | :--- | :--- |
 | **Microcontroller** | **Seeed Studio XIAO ESP32-C3** | 1 | 32-bit RISC-V @ 160MHz. Built-in Wi-Fi AP, ESP-NOW, and Bluetooth. Weighs only 1.2g. |
 | **Flapping Servos** | **Servomy SDS1601** (or *C-Torque 9g HV* / *PTK 7465MG*) | 2 | **Must be 8.4V (2S) compatible**, Coreless, Metal-Gear, speed $\le$ 0.08s/60°, 7.5 kg·cm stall torque. |
+| **PPM Receiver (Optional)** | **FlySky FS-A8S** (or FS-iA6B / micro PPM receiver) | 1 | Connects to Pin D9 for physical RC transmitter control. |
 | **Step-Down Buck Regulator** | **Micro 1.8A–3A Buck Converter** (MP2307 or Mini 360) | 1 | Steps down 2S 8.4V battery voltage to clean 5.0V for the XIAO ESP32-C3. |
 | **Power Decoupling Capacitor** | **470µF – 1000µF Low-ESR Electrolytic (10V or 16V)** | 1 | Connects across the 8.4V servo power rail to absorb back-EMF spikes. |
 | **Battery Voltage Divider** | 1× **51 kΩ** (top) & 1× **18 kΩ / 20 kΩ** (bottom) | 1 set | Scales 8.4V LiPo down to < 2.5V for the XIAO D2 ADC pin. |
@@ -81,13 +113,14 @@ An end-to-end, highly detailed engineering and build manual for the **ESP32-C3 B
 
 ---
 
-## 4. Phase 1: 3D Printing & Verified Slicer Parameters
+## 5. Phase 1: 3D Printing & Slicer Configuration
 
-The chassis and drive arms are located in `bionic butterfly mount 20260113/`:
-* [`FC Mount V5.STL`](file:///Users/mouryasaisandeep/Desktop/Projects/Bionic_Butterfly/bionic%20butterfly%20mount%2020260113/FC%20Mount%20V5.STL) (Central Chassis)
-* [`ARMV5.STL`](file:///Users/mouryasaisandeep/Desktop/Projects/Bionic_Butterfly/bionic%20butterfly%20mount%2020260113/ARMV5.STL) (Wing Hub Drive Arm)
+All models are pre-processed in [`hardware/`](./hardware/):
+* [`hardware/FC_Mount_V5.stl`](./hardware/FC_Mount_V5.stl) (Central Chassis)
+* [`hardware/ARMV5_Right.stl`](./hardware/ARMV5_Right.stl) (Right Wing Arm)
+* [`hardware/ARMV5_Left_Mirrored.stl`](./hardware/ARMV5_Left_Mirrored.stl) (**Pre-mirrored** Left Wing Arm)
 
-### Verified Slicer Profile (from `Print_Settings.jpg`)
+### Verified Slicer Profile (from [`documentation/Print_Settings.jpg`](./documentation/Print_Settings.jpg)):
 * **Slicer:** Bambu Studio / OrcaSlicer / PrusaSlicer
 * **Material:** **PETG** (Recommended for vibration damping and impact resistance) or Tough PLA
 * **Layer Height:** `0.16 mm` (First Layer: `0.20 mm`)
@@ -95,26 +128,21 @@ The chassis and drive arms are located in `bionic butterfly mount 20260113/`:
 * **Top Shell:** `5 layers` (1.0 mm) with **Monotonic** surface pattern
 * **Bottom Shell:** `3 layers` (0.6 mm) with **Monotonic** surface pattern
 * **Sparse Infill Density:**
-  * Chassis (`FC Mount V5`): **15% Rectilinear** (~5.2g)
-  * Wing Arms (`ARMV5`): **100% Solid** (~3.0g each)
+  * Chassis (`FC_Mount_V5.stl`): **15% Rectilinear** (~5.2g)
+  * Wing Arms (`ARMV5_Right.stl` & `ARMV5_Left_Mirrored.stl`): **100% Solid** (~3.0g each)
 * **Supports:** **Disabled** (Prints cleanly without support material when oriented flat on plate)
 * **Seam Position:** **Aligned**
 
-> [!IMPORTANT]
-> **Wing Arm Chirality:**
-> Print **1× Normal** `ARMV5.STL` for the Right Wing.
-> In your slicer, right-click `ARMV5.STL` -> **Mirror along X or Y axis**, and print **1× Mirrored** for the Left Wing!
-
 ---
 
-## 5. Phase 2: Wing Skeleton & Carbon Fiber Cut List
+## 6. Phase 2: Wing Skeleton & Exact Carbon Fiber Cut List
 
 The wing structure follows the official engineering blueprints:
-* Vector PDF: [`ESP_FLUTTER_Resources/Left_Wing_Blueprint.pdf`](file:///Users/mouryasaisandeep/Desktop/Projects/Bionic_Butterfly/ESP_FLUTTER_Resources/Left_Wing_Blueprint.pdf)
-* Vector PDF: [`ESP_FLUTTER_Resources/Right_Wing_Blueprint.pdf`](file:///Users/mouryasaisandeep/Desktop/Projects/Bionic_Butterfly/ESP_FLUTTER_Resources/Right_Wing_Blueprint.pdf)
+* Vector PDF: [`documentation/Left_Wing_Blueprint.pdf`](./documentation/Left_Wing_Blueprint.pdf)
+* Vector PDF: [`documentation/Right_Wing_Blueprint.pdf`](./documentation/Right_Wing_Blueprint.pdf)
 
 ### Exact Rod Cut List (Per Wing)
-*(Refer to [`ESP_FLUTTER_Resources/Rod_Length_and_Quantity_Chart.jpg`](file:///Users/mouryasaisandeep/Desktop/Projects/Bionic_Butterfly/ESP_FLUTTER_Resources/Rod_Length_and_Quantity_Chart.jpg))*
+*(Refer to [`documentation/Rod_Length_and_Quantity_Chart.jpg`](./documentation/Rod_Length_and_Quantity_Chart.jpg))*
 
 ```
                       1.0 mm Leading Edge Rod (400 mm)
@@ -163,7 +191,7 @@ The wing structure follows the official engineering blueprints:
 
 ---
 
-## 6. Phase 3: Wing Skinning & Night-Flight Flexible LED Filaments
+## 7. Phase 3: Wing Skinning & Night-Flight Flexible LED Filaments
 
 1. **Flexible LED Filament (Optional for Night Flying):**
    * Lay one 130mm 3V flexible LED filament along the 1.0mm leading edge carbon rod.
@@ -177,9 +205,9 @@ The wing structure follows the official engineering blueprints:
 
 ---
 
-## 7. Phase 4: Servo Actuation & Spline Indexing
+## 8. Phase 4: Servo Actuation & Spline Indexing
 
-Refer to [`ESP_FLUTTER_Resources/SDS1601_Servo_Specs.jpg`](file:///Users/mouryasaisandeep/Desktop/Projects/Bionic_Butterfly/ESP_FLUTTER_Resources/SDS1601_Servo_Specs.jpg):
+Refer to [`documentation/SDS1601_Servo_Datasheet.jpg`](./documentation/SDS1601_Servo_Datasheet.jpg):
 * **Neutral Pulse:** 1520 µs
 * **Travel Range:** 800 µs – 2200 µs
 * **Refresh Rate:** 333 Hz
@@ -191,14 +219,14 @@ Refer to [`ESP_FLUTTER_Resources/SDS1601_Servo_Specs.jpg`](file:///Users/mouryas
    * Mount the single-arm horn perpendicular (90°) to the servo body.
    * Fasten with the central spline retention screw.
 3. **Chassis Installation:**
-   * Slide servos into [`FC Mount V5.STL`](file:///Users/mouryasaisandeep/Desktop/Projects/Bionic_Butterfly/bionic%20butterfly%20mount%2020260113/FC%20Mount%20V5.STL) and secure using M2 self-tapping screws.
-   * Fasten the wing drive arms (`ARMV5`) to the servo horns. Manually check for zero mechanical binding through ±65° of travel.
+   * Slide servos into [`hardware/FC_Mount_V5.stl`](./hardware/FC_Mount_V5.stl) and secure using M2 self-tapping screws.
+   * Fasten the wing drive arms (`ARMV5_Right.stl` and `ARMV5_Left_Mirrored.stl`) to the servo horns. Manually check for zero mechanical binding through ±65° of travel.
 
 ---
 
-## 8. Phase 5: Electrical Wiring & Power Conditioning
+## 9. Phase 5: Electrical Wiring & Power Conditioning
 
-Refer to the official schematic: [`ESP_FLUTTER_Resources/Wiring_Diagram_Modular_ESP32C3.jpg`](file:///Users/mouryasaisandeep/Desktop/Projects/Bionic_Butterfly/ESP_FLUTTER_Resources/Wiring_Diagram_Modular_ESP32C3.jpg).
+Refer to the official schematic: [`documentation/Wiring_Diagram_ESP32.jpg`](./documentation/Wiring_Diagram_ESP32.jpg).
 
 ```
                       +-----------------------------------+
@@ -236,17 +264,17 @@ Refer to the official schematic: [`ESP_FLUTTER_Resources/Wiring_Diagram_Modular_
   * Drain switches negative side of Wing LEDs through two 150Ω resistors to 5V.
 * **Status LED (Green):** $\rightarrow$ XIAO Pin **D6** (via 220Ω resistor)
 * **Low Battery LED (Red):** $\rightarrow$ XIAO Pin **D8** (via 68Ω resistor)
-* **Optional ELRS Receiver:**
-  * Receiver TX $\rightarrow$ XIAO Pin **D9** (RX)
-  * Receiver RX $\rightarrow$ XIAO Pin **D10** (TX)
+* **PPM RC Receiver Signal:** $\rightarrow$ XIAO Pin **D9** (powered from 5V rail)
 
 ---
 
-## 9. Phase 6: Firmware Setup & Flashing
+## 10. Phase 6: Firmware Setup & Flashing
 
-The complete firmware is available in:
-* [`ESP32_C3_Firmware/ESP32_Bionic_Butterfly.ino`](file:///Users/mouryasaisandeep/Desktop/Projects/Bionic_Butterfly/ESP32_C3_Firmware/ESP32_Bionic_Butterfly.ino) (Arduino IDE single-sketch version)
-* [`ESP-FLUTTER-Source/`](file:///Users/mouryasaisandeep/Desktop/Projects/Bionic_Butterfly/ESP-FLUTTER-Source/) (Upstream PlatformIO modular project)
+The firmware is located in [`firmware/ESP32_Bionic_Butterfly/`](./firmware/ESP32_Bionic_Butterfly/):
+* [`firmware/ESP32_Bionic_Butterfly/ESP32_Bionic_Butterfly.ino`](./firmware/ESP32_Bionic_Butterfly/ESP32_Bionic_Butterfly.ino)
+* [`firmware/ESP32_Bionic_Butterfly/config.h`](./firmware/ESP32_Bionic_Butterfly/config.h)
+* [`firmware/ESP32_Bionic_Butterfly/ppm_receiver.h`](./firmware/ESP32_Bionic_Butterfly/ppm_receiver.h)
+* [`firmware/ESP32_Bionic_Butterfly/web_ui.h`](./firmware/ESP32_Bionic_Butterfly/web_ui.h)
 
 ### Flashing via Arduino IDE:
 1. Open **Arduino IDE -> Settings** and add the ESP32 board URL:
@@ -258,34 +286,39 @@ The complete firmware is available in:
    * **USB CDC On Boot:** `Enabled`
    * **Flash Frequency:** `80MHz`
    * **Upload Speed:** `921600`
-6. Open [`ESP32_C3_Firmware/ESP32_Bionic_Butterfly.ino`](file:///Users/mouryasaisandeep/Desktop/Projects/Bionic_Butterfly/ESP32_C3_Firmware/ESP32_Bionic_Butterfly.ino) and click **Upload**.
+6. Open `firmware/ESP32_Bionic_Butterfly/ESP32_Bionic_Butterfly.ino` and click **Upload**.
 
 ---
 
-## 10. Phase 7: Piloting via Smartphone Web App or RC Transmitter
+## 11. Phase 7: Dual Piloting: Smartphone Web App & PPM RC Controller
 
-### Method A: Smartphone Web App (Recommended)
+### Automatic Arbitration Logic:
+* **When PPM RC is Active:** If your FlySky/RC transmitter is powered on and sending pulses to Pin D9, the flight controller automatically gives **100% control to your physical transmitter**. The web app badge displays `PPM RC ACTIVE`.
+* **When Smartphone Web App is Active:** If the RC transmitter is turned off or unplugged, the smartphone web cockpit seamlessly takes control!
+
+### Method A: Smartphone Web App
 1. Turn on the butterfly.
 2. In your phone's Wi-Fi settings, connect to **`Butterfly_RC`** (Password: **`12345678`**).
 3. Open Safari or Chrome and navigate to **`http://192.168.4.1`**.
-4. The web cockpit displays:
-   * **Vertical Throttle Slider:** 0% to 100% flapping frequency/amplitude.
-   * **Touch Joystick:** Steering (differential amplitude) and Pitch.
+4. **Cockpit Interface:**
+   * **Vertical Throttle Slider:** 0% to 100% flapping frequency and amplitude.
+   * **Touch Joystick:** Steering (differential amplitude) and Pitch (climb/dive bias).
    * **LED Toggle:** Cycles Off, Breathing Glow, and Night Strobe.
    * **Live Battery Gauge:** Real-time 2S pack voltage.
    * **Arm/Disarm Button:** Instantly cuts power to wings.
 
-### Method B: RC Transmitter (ExpressLRS or ESP-NOW)
-* **Channel 1 (Roll):** Differential-amplitude steering.
-* **Channel 2 (Pitch):** Symmetric neutral pitch bias.
-* **Channel 3 (Throttle):** Flapping modulation (1.4 Hz to 4.2 Hz).
+### Method B: PPM RC Transmitter (FlySky FS-i6 / EdgeTX)
+* **Channel 1 (Aileron):** Differential-amplitude steering.
+* **Channel 2 (Elevator):** Symmetric neutral pitch bias.
+* **Channel 3 (Throttle):** Flapping frequency and amplitude modulation (1.4 Hz to 4.2 Hz).
 * **Channel 5 (Arm):** 2-position switch to arm/disarm.
+* **Channel 6 (Bias Pot):** Fine pitch trim.
 * **Channel 7 (Perch):** Activates gentle resting flutter.
 * **Channel 8 (LED):** Toggles night lighting modes.
 
 ---
 
-## 11. Phase 8: Pre-Flight Trimming, CG Balancing & Maiden Flight
+## 12. Phase 8: CG Balancing, Flight Trimming & Maiden Flight
 
 1. **Center of Gravity (CG) Balancing:**
    * Support the butterfly under the wing arms at **35% to 40% of the mean wing chord**.
@@ -301,13 +334,13 @@ The complete firmware is available in:
 
 ---
 
-## 12. Troubleshooting & Diagnostics
+## 13. Troubleshooting & Diagnostics
 
 | Symptom | Probable Cause | Solution |
 | :--- | :--- | :--- |
 | **Butterfly flaps but fails to climb** | Wing ribs too rigid or insufficient trailing edge billow | Verify leading edge is 1.0mm, main vein is 1.5mm, and side ribs are 1.0mm. Ensure membrane is flexible. |
 | **Microcontroller crashes during flapping** | Servo back-EMF spike or voltage sag | Ensure the 470µF–1000µF Low-ESR capacitor is soldered across the 8.4V rail and the 5V buck converter is working. |
-| **Butterfly drops altitude in turns** | Insufficient turn lift compensation | In firmware, verify `TURN_LIFT_BOOST` is set to `0.15f` (+15% boost). |
-| **Butterfly banks aggressively to one side** | Asymmetric wing construction or servo neutral offset | Check wing weights on a precision scale. Adjust trim slider in web app. |
+| **Butterfly drops altitude in turns** | Insufficient turn lift compensation | In firmware, verify `TURN_LIFT_BOOST_FRAC` is set to `0.15f` (+15% boost). |
+| **Butterfly banks aggressively to one side** | Asymmetric wing construction or servo neutral offset | Check wing weights on a precision scale. Adjust trim slider in web app or CH6 pot. |
 | **Servos buzz or overheat** | Travel clipping against physical travel end-stop | Verify pulse bounds (`SERVO_US_MIN = 800`, `SERVO_US_MAX = 2200`). |
 | **Butterfly stalls backward upon release** | Tail-heavy (CG too far aft) | Slide battery forward toward the nose. |
